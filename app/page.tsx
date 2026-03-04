@@ -1,7 +1,7 @@
 import { createClient } from "@/utils/supabase/server";
 import LibraryView from "@/components/views/LibraryView";
 
-export const revalidate = 3600;
+export const revalidate = 0;
 
 export default async function HomePage() {
   const supabase = await createClient();

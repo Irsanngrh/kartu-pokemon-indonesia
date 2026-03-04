@@ -12,7 +12,8 @@ export default async function CardDetail({ params }: { params: Promise<{ set_cod
     .select("*, sets!inner(name, code)")
     .ilike("sets.code", set_code)
     .like("card_number", `${card_number}%`)
-    .order("id", { ascending: true });
+    .order("variant_order", { ascending: true })
+    .order("image_url", { ascending: true });
 
   if (error || !cards || cards.length === 0) notFound();
 

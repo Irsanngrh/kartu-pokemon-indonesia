@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { ChevronLeft, Plus, Minus, Heart, Bookmark } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { ChevronLeft, Plus, Minus, Heart, Bookmark, Info } from "lucide-react";
 import ZoomableImage from "@/components/ui/ZoomableImage";
 import { createClient } from "@/utils/supabase/client";
 
@@ -16,24 +17,42 @@ export default function CardDetailView({ initialCards }: { initialCards: any[] }
   const [userId, setUserId] = useState<string | null>(null);
   const [collectionMap, setCollectionMap] = useState<Record<string, CollectionData>>({});
   const [isLoading, setIsLoading] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const searchParams = useSearchParams();
+  const fromSource = searchParams.get("from");
+
+  let backUrl = "/";
+  let backText = "Kembali ke Library";
+
+  if (fromSource === "collection") {
+    backUrl = "/collection";
+    backText = "Kembali ke Koleksi";
+  } else if (fromSource === "wishlist") {
+    backUrl = "/collection";
+    backText = "Kembali ke Wishlist";
+  }
 
   const card = initialCards[activeIndex];
-  const supabase = createClient();
+  const [supabase] = useState(() => createClient());
 
   useEffect(() => {
+    let isMounted = true;
+    
     const fetchUserAndCollection = async () => {
       const { data: authData } = await supabase.auth.getUser();
-      if (!authData.user) return;
+      if (!authData.user || !isMounted) return;
       
       setUserId(authData.user.id);
       const cardIds = initialCards.map(c => c.id);
+      
       const { data: colData } = await supabase
         .from("user_collections")
         .select("card_id, quantity, is_wishlist")
         .in("card_id", cardIds)
         .eq("user_id", authData.user.id);
 
-      if (colData) {
+      if (colData && isMounted) {
         const newMap: Record<string, CollectionData> = {};
         colData.forEach(item => {
           newMap[item.card_id] = { quantity: item.quantity, is_wishlist: item.is_wishlist };
@@ -41,19 +60,48 @@ export default function CardDetailView({ initialCards }: { initialCards: any[] }
         setCollectionMap(newMap);
       }
     };
+    
     fetchUserAndCollection();
+    
+    return () => { 
+      isMounted = false; 
+    };
   }, [initialCards, supabase]);
+
+  const showToast = (message: string) => {
+    setToastMessage(message);
+    setTimeout(() => setToastMessage(null), 3500);
+  };
 
   const updateDatabase = async (cardId: string, newData: CollectionData) => {
     if (!userId) return;
     setIsLoading(true);
     
+    const { data: existing } = await supabase
+      .from("user_collections")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("card_id", cardId)
+      .maybeSingle();
+    
     if (newData.quantity === 0 && !newData.is_wishlist) {
-      await supabase.from("user_collections").delete().eq("user_id", userId).eq("card_id", cardId);
+      if (existing) {
+        await supabase.from("user_collections").delete().eq("id", existing.id);
+      }
     } else {
-      await supabase.from("user_collections").upsert({
-        user_id: userId, card_id: cardId, quantity: newData.quantity, is_wishlist: newData.is_wishlist
-      }, { onConflict: "user_id, card_id" });
+      if (existing) {
+        await supabase.from("user_collections").update({ 
+          quantity: newData.quantity, 
+          is_wishlist: newData.is_wishlist 
+        }).eq("id", existing.id);
+      } else {
+        await supabase.from("user_collections").insert({ 
+          user_id: userId, 
+          card_id: cardId, 
+          quantity: newData.quantity, 
+          is_wishlist: newData.is_wishlist 
+        });
+      }
     }
     
     setCollectionMap(prev => ({ ...prev, [cardId]: newData }));
@@ -62,9 +110,10 @@ export default function CardDetailView({ initialCards }: { initialCards: any[] }
 
   const handleQuantityChange = (amount: number) => {
     if (!userId) {
-      alert("Silakan login terlebih dahulu untuk menambahkan ke koleksi.");
+      showToast("Silakan login terlebih dahulu untuk menambahkan ke koleksi.");
       return;
     }
+    
     const currentData = collectionMap[card.id] || { quantity: 0, is_wishlist: false };
     const newQuantity = Math.max(0, currentData.quantity + amount);
     updateDatabase(card.id, { ...currentData, quantity: newQuantity });
@@ -72,9 +121,10 @@ export default function CardDetailView({ initialCards }: { initialCards: any[] }
 
   const toggleWishlist = () => {
     if (!userId) {
-      alert("Silakan login terlebih dahulu untuk menggunakan fitur wishlist.");
+      showToast("Silakan login terlebih dahulu untuk menggunakan fitur wishlist.");
       return;
     }
+    
     const currentData = collectionMap[card.id] || { quantity: 0, is_wishlist: false };
     updateDatabase(card.id, { ...currentData, is_wishlist: !currentData.is_wishlist });
   };
@@ -83,32 +133,54 @@ export default function CardDetailView({ initialCards }: { initialCards: any[] }
     const nameUpper = (card.name || "").toUpperCase();
     const stageRaw = (card.stage || "").trim();
     const stageLower = stageRaw.toLowerCase();
-
+    
     let base = "Lainnya";
-    if (stageLower.includes("basic") || stageLower === "basic") base = "Basic";
-    else if (stageLower.includes("stage 1")) base = "Stage 1";
-    else if (stageLower.includes("stage 2")) base = "Stage 2";
-    else if (stageRaw) base = stageRaw;
+
+    if (stageLower.includes("basic") || stageLower === "basic") {
+      base = "Basic";
+    } else if (stageLower.includes("stage 1")) {
+      base = "Stage 1";
+    } else if (stageLower.includes("stage 2")) {
+      base = "Stage 2";
+    } else if (stageRaw) {
+      base = stageRaw;
+    }
 
     if (nameUpper.includes("VMAX")) return "VMAX";
     if (nameUpper.includes("VSTAR")) return "VSTAR";
 
     let suffix = "";
-    if (nameUpper.endsWith(" EX") || nameUpper.includes(" EX ")) suffix = "EX";
-    else if (nameUpper.includes("GX")) suffix = "GX";
-    else if (nameUpper.endsWith(" V") || nameUpper.includes(" V ")) suffix = "V";
+    
+    if (nameUpper.endsWith(" EX") || nameUpper.includes(" EX ")) {
+      suffix = "EX";
+    } else if (nameUpper.includes("GX")) {
+      suffix = "GX";
+    } else if (nameUpper.endsWith(" V") || nameUpper.includes(" V ")) {
+      suffix = "V";
+    }
 
-    if (suffix && (base === "Basic" || base === "Stage 1" || base === "Stage 2")) return `${base} ${suffix}`;
+    if (suffix && (base === "Basic" || base === "Stage 1" || base === "Stage 2")) {
+      return `${base} ${suffix}`;
+    }
+    
     return base;
   })();
 
   const currentCollection = collectionMap[card.id] || { quantity: 0, is_wishlist: false };
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pb-20 pt-8">
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pb-20 pt-8 relative">
+      
+      {toastMessage && (
+        <div className="fixed top-20 sm:top-24 left-1/2 -translate-x-1/2 z-[100] w-[90%] sm:w-auto max-w-[360px] sm:max-w-md bg-foreground text-background px-4 sm:px-6 py-3 sm:py-3.5 rounded-2xl sm:rounded-full shadow-2xl font-bold text-[13px] sm:text-sm flex items-center justify-center sm:justify-start gap-3 transition-all animate-in fade-in slide-in-from-top-4 text-center sm:text-left leading-relaxed">
+          <Info size={18} className="text-background shrink-0" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
       <div className="mb-6">
-        <Link href="/" className="inline-flex items-center gap-2 text-sm text-foreground/50 hover:text-foreground transition-colors w-fit font-medium">
-          <ChevronLeft size={16} /> Kembali ke Library
+        <Link href={backUrl} className="inline-flex items-center gap-2 text-sm text-foreground/50 hover:text-foreground transition-colors w-fit font-medium">
+          <ChevronLeft size={16} /> {backText}
         </Link>
       </div>
 

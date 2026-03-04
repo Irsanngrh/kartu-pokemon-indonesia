@@ -16,23 +16,29 @@ let globalSession = {
   rarityFilter: "Semua",
   visibleCount: 30,
 };
+
 let globalScrollY = 0;
 
 function getCardType(card: any) {
   if (card.hp) return "Pokémon";
+  
   const stage = (card.stage || "").toLowerCase();
+  
   if (stage.includes("supporter")) return "Supporter";
   if (stage.includes("stadium")) return "Stadium";
   if (stage.includes("tool")) return "Pokémon Tool";
   if (stage.includes("item")) return "Item";
   if (stage.includes("energy") || stage.includes("energi")) return "Energy";
+  
   return "Lainnya";
 }
 
 function getElements(card: any) {
   if (!card.types) return [];
+  
   return card.types.map((url: string) => {
     const u = url.toLowerCase();
+    
     if (u.includes("grass")) return "Rumput";
     if (u.includes("fire")) return "Api";
     if (u.includes("water")) return "Air";
@@ -44,6 +50,7 @@ function getElements(card: any) {
     if (u.includes("fairy")) return "Peri";
     if (u.includes("dragon")) return "Naga";
     if (u.includes("colorless")) return "Normal";
+    
     return "Lainnya";
   });
 }
@@ -54,21 +61,34 @@ function getStageInfo(card: any) {
   const stageLower = stageRaw.toLowerCase();
 
   let base = "Lainnya";
-  if (stageLower.includes("basic") || stageLower === "basic") base = "Basic";
-  else if (stageLower.includes("stage 1")) base = "Stage 1";
-  else if (stageLower.includes("stage 2")) base = "Stage 2";
-  else if (stageRaw) base = stageRaw;
+
+  if (stageLower.includes("basic") || stageLower === "basic") {
+    base = "Basic";
+  } else if (stageLower.includes("stage 1")) {
+    base = "Stage 1";
+  } else if (stageLower.includes("stage 2")) {
+    base = "Stage 2";
+  } else if (stageRaw) {
+    base = stageRaw;
+  }
 
   if (nameUpper.includes("VMAX")) return { categories: ["VMAX"] };
   if (nameUpper.includes("VSTAR")) return { categories: ["VSTAR"] };
 
   let suffix = "";
-  if (nameUpper.endsWith(" EX") || nameUpper.includes(" EX ")) suffix = "EX";
-  else if (nameUpper.includes("GX")) suffix = "GX";
-  else if (nameUpper.endsWith(" V") || nameUpper.includes(" V ")) suffix = "V";
+
+  if (nameUpper.endsWith(" EX") || nameUpper.includes(" EX ")) {
+    suffix = "EX";
+  } else if (nameUpper.includes("GX")) {
+    suffix = "GX";
+  } else if (nameUpper.endsWith(" V") || nameUpper.includes(" V ")) {
+    suffix = "V";
+  }
 
   if (suffix) {
-    if (base === "Basic" || base === "Stage 1" || base === "Stage 2") return { categories: [base, suffix] };
+    if (base === "Basic" || base === "Stage 1" || base === "Stage 2") {
+      return { categories: [base, suffix] };
+    }
     return { categories: [suffix] };
   }
   
@@ -123,7 +143,9 @@ export default function LibraryView({ initialCards }: { initialCards: any[] }) {
             setRegulationFilter(parsed.regulationFilter || "Semua");
             setRarityFilter(parsed.rarityFilter || "Semua");
             setVisibleCount(parsed.visibleCount || 30);
-          } catch (e) {}
+          } catch (e) {
+            
+          }
         }
       }
       setIsInitialized(true);
@@ -132,10 +154,12 @@ export default function LibraryView({ initialCards }: { initialCards: any[] }) {
 
   useEffect(() => {
     if (!isInitialized) return; 
+
     globalSession = {
       searchQuery, expansionFilter, cardTypeFilter, elementFilter, 
       stageFilter, illustratorFilter, regulationFilter, rarityFilter, visibleCount
     };
+    
     sessionStorage.setItem('libraryFilters', JSON.stringify(globalSession));
   }, [searchQuery, expansionFilter, cardTypeFilter, elementFilter, stageFilter, illustratorFilter, regulationFilter, rarityFilter, visibleCount, isInitialized]);
 
@@ -144,12 +168,16 @@ export default function LibraryView({ initialCards }: { initialCards: any[] }) {
       isFirstRender.current = false;
       return;
     }
-    if (!isRestoring.current) setVisibleCount(30);
+    if (!isRestoring.current) {
+      setVisibleCount(30);
+    }
   }, [searchQuery, expansionFilter, cardTypeFilter, elementFilter, stageFilter, illustratorFilter, regulationFilter, rarityFilter]);
 
   useEffect(() => {
     if (!isInitialized) return;
+
     let timeoutId: NodeJS.Timeout;
+    
     const handleScroll = () => {
       if (!isRestoring.current) globalScrollY = window.scrollY;
       setShowScrollTop(window.scrollY > 400);
@@ -185,8 +213,9 @@ export default function LibraryView({ initialCards }: { initialCards: any[] }) {
 
   const illustrators = useMemo(() => ["Semua", ...Array.from(new Set(cardsForDynamicFilters.map(c => c.illustrator).filter(Boolean))).sort((a, b) => a.localeCompare(b))], [cardsForDynamicFilters]);
   const regulations = useMemo(() => ["Semua", ...Array.from(new Set(cardsForDynamicFilters.map(c => c.regulation_mark).filter(Boolean))).sort((a, b) => a.localeCompare(b))], [cardsForDynamicFilters]);
+  
   const rarities = useMemo(() => {
-    const rarityOrder = ["Tanpa Tanda", "C", "U", "R", "RR", "RRR", "PR", "TR", "SR", "HR", "UR", "K", "A", "AR", "SAR", "S", "SSR", "ACE", "BWR", "MUR"];
+    const rarityOrder = ["Tanpa Tanda", "C", "U", "R", "RR", "ACE", "RRR", "AR", "PR", "TR", "SR", "MA", "HR", "UR", "K", "A", "SAR", "S", "SSR", "BWR", "MUR"];
     const existingRarities = new Set(cardsForDynamicFilters.map(c => c.rarity).filter(Boolean));
     const sortedRarities = rarityOrder.filter(r => existingRarities.has(r));
     const unknownRarities = Array.from(existingRarities).filter(r => !rarityOrder.includes(r as string)).sort((a, b) => a.localeCompare(b));
@@ -210,6 +239,7 @@ export default function LibraryView({ initialCards }: { initialCards: any[] }) {
   const filteredCards = useMemo(() => {
     const filtered = initialCards.filter(card => {
       if (searchQuery && !card.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+      
       if (expansionFilter !== "Semua") {
         const cardExp = card.sets ? `${card.sets.name} (${card.sets.code})` : "";
         if (cardExp !== expansionFilter) return false;
@@ -237,7 +267,13 @@ export default function LibraryView({ initialCards }: { initialCards: any[] }) {
       
       const numA = parseInt((a.card_number || "0").replace(/\D/g, "")) || 0;
       const numB = parseInt((b.card_number || "0").replace(/\D/g, "")) || 0;
-      return numA - numB;
+      if (numA !== numB) return numA - numB;
+      
+      const orderA = a.variant_order || 1;
+      const orderB = b.variant_order || 1;
+      if (orderA !== orderB) return orderA - orderB;
+      
+      return (a.image_url || "").localeCompare(b.image_url || "");
     });
   }, [initialCards, searchQuery, expansionFilter, cardTypeFilter, elementFilter, stageFilter, illustratorFilter, regulationFilter, rarityFilter]);
 
@@ -247,13 +283,22 @@ export default function LibraryView({ initialCards }: { initialCards: any[] }) {
   useEffect(() => {
     const currentObserver = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && hasMoreCards) setVisibleCount((prev) => prev + 30);
+        if (entries[0].isIntersecting && hasMoreCards) {
+          setVisibleCount((prev) => prev + 30);
+        }
       },
       { rootMargin: "200px" }
     );
 
-    if (loaderRef.current) currentObserver.observe(loaderRef.current);
-    return () => { if (loaderRef.current) currentObserver.unobserve(loaderRef.current); };
+    if (loaderRef.current) {
+      currentObserver.observe(loaderRef.current);
+    }
+    
+    return () => { 
+      if (loaderRef.current) {
+        currentObserver.unobserve(loaderRef.current); 
+      }
+    };
   }, [hasMoreCards]);
 
   useEffect(() => {
@@ -267,6 +312,7 @@ export default function LibraryView({ initialCards }: { initialCards: any[] }) {
         } else {
             window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'auto' });
         }
+        
         if (Math.abs(window.scrollY - targetY) < 5 || attempts >= 20) {
           clearInterval(restoreInterval);
           setTimeout(() => { isRestoring.current = false; }, 100);
@@ -335,7 +381,7 @@ export default function LibraryView({ initialCards }: { initialCards: any[] }) {
 
       <div className="relative z-10 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-5">
         {displayedCards.map((card) => (
-          <PokemonCard key={card.id} card={card} />
+          <PokemonCard key={card.id} card={card} source="library" />
         ))}
         {filteredCards.length === 0 && (
           <div className="col-span-full py-20 flex flex-col items-center justify-center gap-3">

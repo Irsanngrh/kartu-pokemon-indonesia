@@ -3,11 +3,25 @@ const cheerio = require("cheerio");
 const fs = require("fs");
 
 const TARGET_SETS = [
-    { code: "MA3", name: "Evolusi Mega Impian EX" }
+    { code: "MA3", name: "Evolusi Mega Impian ex" },
+    { code: "MA2", name: "Kobaran Biru" },
+    { code: "MA1", name: "Evolusi Mega" },
+    { code: "SV11S", name: "Hitam & Putih" },
+    { code: "SV10S", name: "Kehadiran Juara" },
+    { code: "SV9S", name: "Ikatan Takdir" },
+    { code: "SV8A", name: "Festival Terastal ex" },
+    { code: "SV8S", name: "Kilat Rasi" },
+    { code: "SV7S", name: "Bimbingan Rasi" },
+    { code: "SV6S", name: "Topeng Transfigurasi" },
+    { code: "SV5A", name: "Paradoks Andalan" },
+    { code: "SV5S", name: "Harta Berkilau ex" },
+    { code: "SV4S", name: "Pertemuan Paradoks" },
+    { code: "SV3S", name: "Kilau Hitam" },
+    { code: "SV2A", name: "Kartu Pokémon 151" }
 ];
 
 const RARITY_MAP = {
-    "20": "MUR", "19": "BWR", "18": "ACE", "17": "SSR", "16": "S",
+    "21": "MA",  "20": "MUR", "19": "BWR", "18": "ACE", "17": "SSR", "16": "S",
     "15": "SAR", "14": "AR",  "13": "A",   "12": "K",   "11": "Tanpa Tanda",
     "10": "UR",  "9": "HR",   "8": "SR",   "7": "TR",   "6": "PR",
     "5": "RRR",  "4": "RR",   "3": "R",    "2": "U",    "1": "C"
@@ -17,24 +31,24 @@ const baseUrl = "https://asia.pokemon-card.com";
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function run() {
-    console.log("Memulai browser tanpa antarmuka (headless)...");
+    console.log("Starting headless browser...");
     const browser = await puppeteer.launch({ headless: true });
     const page = await browser.newPage();
 
     await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36");
     
-    console.log("Membuka halaman utama untuk mencegah pemblokiran CORS...");
+    console.log("Opening base URL to bypass CORS...");
     await page.goto(`${baseUrl}/id/card-search/`, { waitUntil: "domcontentloaded" });
     
     for (const targetSet of TARGET_SETS) {
         console.log(`\n=================================================`);
-        console.log(`Memproses Ekspansi: ${targetSet.code} - ${targetSet.name}`);
+        console.log(`Processing Set: ${targetSet.code} - ${targetSet.name}`);
         console.log(`=================================================`);
         
         const urlToRarity = {};
         const rarityKeys = Object.keys(RARITY_MAP);
 
-        console.log(`\nMembangun Peta Rarity untuk ekspansi ${targetSet.code}...`);
+        console.log(`\nBuilding rarity map...`);
         for (const rarityValue of rarityKeys) {
             const rarityLabel = RARITY_MAP[rarityValue];
             let currentPage = 1;
@@ -64,28 +78,28 @@ async function run() {
                     urlToRarity[link] = rarityLabel;
                 }
                 
-                console.log(`  -> Ditemukan ${links.length} kartu dengan rarity [${rarityLabel}] (Halaman ${currentPage})`);
+                console.log(`  -> Found ${links.length} cards with rarity [${rarityLabel}] (Page ${currentPage})`);
                 currentPage++;
                 await sleep(800);
             }
         }
-        console.log("Peta Rarity berhasil dibangun!");
+        console.log("Rarity map built successfully!");
   
-        console.log(`\nMengumpulkan semua tautan kartu untuk ${targetSet.code}...`);
+        console.log(`\nGathering all card links...`);
         let listPage = 1;
         let hasMorePages = true;
         const allCardLinks = [];
 
         while (hasMorePages) {
             const listUrl = `${baseUrl}/id/card-search/list/?expansionCodes=${targetSet.code}&pageNo=${listPage}`;
-            console.log(`Memindai daftar halaman ${listPage}...`);
+            console.log(`Scanning page ${listPage}...`);
             
             await page.goto(listUrl, { waitUntil: "networkidle2" });
             
             try {
                 await page.waitForSelector("a[href*='/id/card-search/detail/']", { timeout: 10000 });
             } catch (error) {
-                console.log(`Mencapai akhir halaman. Menghentikan pencarian tautan.`);
+                console.log(`End of pages reached.`);
                 hasMorePages = false;
                 break;
             }
@@ -109,13 +123,13 @@ async function run() {
             }
         }
 
-        console.log(`\nTotal ${allCardLinks.length} kartu ditemukan. Mengekstrak detail...`);
+        console.log(`\nTotal ${allCardLinks.length} cards found. Extracting details...`);
         const extractedResults = [];
 
         for (let i = 0; i < allCardLinks.length; i++) {
             const extractedLink = allCardLinks[i]; 
             const detailUrl = baseUrl + extractedLink;
-            console.log(`[${i + 1}/${allCardLinks.length}] Mengekstrak: ${detailUrl}`);
+            console.log(`[${i + 1}/${allCardLinks.length}] Extracting: ${detailUrl}`);
             
             try {
                 await page.goto(detailUrl, { waitUntil: "networkidle2" });
@@ -193,18 +207,19 @@ async function run() {
 
                 extractedResults.push(card);
             } catch (err) {
-                console.log(`Gagal mengekstrak data untuk: ${detailUrl}`);
+                console.log(`Failed to extract: ${detailUrl}`);
             }
 
-            await sleep(1500);         }
+            await sleep(1500);
+        }
 
         const fileName = `scraped_cards_${targetSet.code}.json`;
-        console.log(`Menyimpan data yang diekstrak ke ${fileName}...`);
+        console.log(`Saving extracted data to ${fileName}...`);
         fs.writeFileSync(fileName, JSON.stringify(extractedResults, null, 2));
     }
 
     await browser.close();
-    console.log("\nProses scraping selesai dan berhasil dieksekusi!");
+    console.log("\nScraping completed successfully!");
 }
 
 run();

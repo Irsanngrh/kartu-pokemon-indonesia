@@ -6,17 +6,20 @@ import { Image as ImageIcon } from "lucide-react";
 
 interface PokemonCardProps {
   card: any;
+  source?: "library" | "collection" | "wishlist";
 }
 
-export default function PokemonCard({ card }: PokemonCardProps) {
+export default function PokemonCard({ card, source = "library" }: PokemonCardProps) {
   const [imageLoaded, setImageLoaded] = useState(false);
   const urlCardNumber = (card.card_number || "000").split('/')[0].trim();
+  
+  const hrefUrl = `/${card.sets?.code || "unknown"}/${urlCardNumber}${source !== "library" ? `?from=${source}` : ""}`;
 
   return (
-    <Link href={`/${card.sets?.code || "unknown"}/${urlCardNumber}`}>
-      <div className="group relative flex flex-col gap-2.5 transition-all duration-300 hover:-translate-y-1.5 cursor-pointer h-full">
+    <Link href={hrefUrl}>
+      <div className="group relative flex flex-col h-full bg-muted/40 rounded-[20px] border border-border/40 backdrop-blur-sm p-2 sm:p-2.5 gap-3 shadow-sm transition-all duration-300 hover:-translate-y-1.5 hover:shadow-md cursor-pointer">
         
-        <div className="relative w-full aspect-[63/88] rounded-[16px] overflow-hidden bg-muted/50 border border-border/50 shadow-sm group-hover:shadow-xl group-hover:border-foreground/30 transition-all flex items-center justify-center">
+        <div className="relative w-full aspect-[63/88] rounded-xl overflow-hidden bg-muted/50 border border-border/50 flex items-center justify-center">
           {!imageLoaded && (
              <div className="absolute inset-0 flex items-center justify-center text-foreground/20">
                <ImageIcon size={32} />
@@ -35,13 +38,13 @@ export default function PokemonCard({ card }: PokemonCardProps) {
           )}
         </div>
 
-        <div className="flex flex-col gap-1 px-1">
+        <div className="flex flex-col gap-1 px-1 pb-1">
           <div className="flex items-center justify-between gap-2">
             <span className="text-[10px] font-bold text-foreground/50 uppercase tracking-widest truncate">
             {card.card_number || "---"}
             </span>
             {card.rarity && (
-              <span className="text-[10px] font-bold text-foreground/60 bg-muted px-1.5 py-0.5 rounded-md">
+              <span className="text-[10px] font-bold text-foreground/60 bg-background/80 px-1.5 py-0.5 rounded-md border border-border/50 shadow-sm">
                 {card.rarity}
               </span>
             )}
@@ -55,6 +58,7 @@ export default function PokemonCard({ card }: PokemonCardProps) {
             </span>
           </div>
         </div>
+
       </div>
     </Link>
   );

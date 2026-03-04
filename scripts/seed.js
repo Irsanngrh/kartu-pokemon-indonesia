@@ -7,29 +7,42 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseKey) {
-    console.error("Kredensial Supabase tidak ditemukan di file .env.local");
+    console.error("Supabase credentials not found in .env.local");
     process.exit(1);
 }
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 const FILES_TO_SEED = [
-    { filePath: "scraped_cards_MA3.json", setCode: "MA3", setName: "Evolusi Mega Impian EX" }
+    { filePath: "scraped_cards_MA3.json", setCode: "MA3", setName: "Evolusi Mega Impian ex" },
+    { filePath: "scraped_cards_MA2.json", setCode: "MA2", setName: "Kobaran Biru" },
+    { filePath: "scraped_cards_MA1.json", setCode: "MA1", setName: "Evolusi Mega" },
+    { filePath: "scraped_cards_SV11S.json", setCode: "SV11S", setName: "Hitam & Putih" },
+    { filePath: "scraped_cards_SV10S.json", setCode: "SV10S", setName: "Kehadiran Juara" },
+    { filePath: "scraped_cards_SV9S.json", setCode: "SV9S", setName: "Ikatan Takdir" },
+    { filePath: "scraped_cards_SV8A.json", setCode: "SV8A", setName: "Festival Terastal ex" },
+    { filePath: "scraped_cards_SV8S.json", setCode: "SV8S", setName: "Kilat Rasi" },
+    { filePath: "scraped_cards_SV7S.json", setCode: "SV7S", setName: "Bimbingan Rasi" },
+    { filePath: "scraped_cards_SV6S.json", setCode: "SV6S", setName: "Topeng Transfigurasi" },
+    { filePath: "scraped_cards_SV5A.json", setCode: "SV5A", setName: "Paradoks Andalan" },
+    { filePath: "scraped_cards_SV5S.json", setCode: "SV5S", setName: "Harta Berkilau ex" },
+    { filePath: "scraped_cards_SV4S.json", setCode: "SV4S", setName: "Pertemuan Paradoks" },
+    { filePath: "scraped_cards_SV3S.json", setCode: "SV3S", setName: "Kilau Hitam" },
+    { filePath: "scraped_cards_SV2A.json", setCode: "SV2A", setName: "Kartu Pokémon 151" }
 ];
 
 async function seedDatabase() {
-    console.log("Memulai proses seeding database...\n");
+    console.log("Starting database seeding...\n");
 
     for (const fileInfo of FILES_TO_SEED) {
-        
         const fullPath = path.join(__dirname, "..", fileInfo.filePath);
 
         if (!fs.existsSync(fullPath)) {
-            console.log(`[SKIP] File tidak ditemukan: ${fileInfo.filePath}`);
+            console.log(`[SKIP] File not found: ${fileInfo.filePath}`);
             continue;
         }
 
-        console.log(`Memproses ekspansi: ${fileInfo.setName} (${fileInfo.setCode})`);
+        console.log(`Processing set: ${fileInfo.setName} (${fileInfo.setCode})`);
 
         let { data: existingSet, error: setError } = await supabase
             .from('sets')
@@ -38,7 +51,8 @@ async function seedDatabase() {
             .single();
 
         if (!existingSet) {
-            console.log(`  -> Membuat set baru: ${fileInfo.setCode}`);
+            console.log(`  -> Creating new set: ${fileInfo.setCode}`);
+            
             const { data: newSet, error: insertSetError } = await supabase
                 .from('sets')
                 .insert({ code: fileInfo.setCode, name: fileInfo.setName })
@@ -46,21 +60,57 @@ async function seedDatabase() {
                 .single();
 
             if (insertSetError) {
-                console.error("Gagal membuat set ekspansi:", insertSetError);
+                console.error("Failed to create set:", insertSetError);
                 continue;
             }
+            
             existingSet = newSet;
         }
 
         const rawData = fs.readFileSync(fullPath, 'utf8');
-        const cards = JSON.parse(rawData);
+        const rawCards = JSON.parse(rawData);
         
-        console.log(`  -> Menemukan ${cards.length} kartu. Mulai mengunggah ke tabel 'cards'...`);
+        console.log(`  -> Found ${rawCards.length} raw cards. Analyzing variants...`);
+
+        const groupedCards = {};
+        
+        for (const card of rawCards) {
+            const num = card.card_number || "unknown";
+            if (!groupedCards[num]) groupedCards[num] = [];
+            groupedCards[num].push(card);
+        }
+
+        const processedCards = [];
+        
+        for (const num in groupedCards) {
+            const group = groupedCards[num];
+            
+            group.sort((a, b) => (a.image_url || "").localeCompare(b.image_url || ""));
+
+            group.forEach((card, index) => {
+                const order = index + 1;
+                let vName = null;
+
+                if (group.length > 1) {
+                    vName = order === 1 ? 'Normal' : 'Holo';
+                }
+
+                card.variant_order = order;
+                card.variant_name = vName;
+                processedCards.push(card);
+            });
+        }
+
+        console.log(`  -> Uploading ${processedCards.length} cards to database...`);
 
         let successCount = 0;
         let errorCount = 0;
 
-        for (const card of cards) {
+        for (let i = 0; i < processedCards.length; i++) {
+            const card = processedCards[i];
+            
+            console.log(`     [${i + 1}/${processedCards.length}] Uploading: ${card.name} (${card.variant_name || 'Normal'})`);
+
             const { error: insertCardError } = await supabase.from('cards').insert({
                 set_id: existingSet.id,
                 card_number: card.card_number || null,
@@ -83,21 +133,22 @@ async function seedDatabase() {
                 regulation_mark: card.regulation_mark || null,
                 image_url: card.image_url || null,
                 expansion_symbol_url: card.expansion_symbol_url || null,
-                variant_name: null
+                variant_name: card.variant_name,
+                variant_order: card.variant_order
             });
 
             if (insertCardError) {
-                console.error(`Gagal mengunggah kartu ${card.name}:`, insertCardError.message);
+                console.error(`     [ERROR] Failed to upload ${card.name}:`, insertCardError.message);
                 errorCount++;
             } else {
                 successCount++;
             }
         }
 
-        console.log(`Selesai memproses ${fileInfo.setCode}. Berhasil: ${successCount}, Gagal: ${errorCount}\n`);
+        console.log(`Finished processing ${fileInfo.setCode}. Success: ${successCount}, Failed: ${errorCount}\n`);
     }
 
-    console.log("Proses unggah (seeding) selesai sepenuhnya!");
+    console.log("Seeding completed successfully!");
 }
 
 seedDatabase();

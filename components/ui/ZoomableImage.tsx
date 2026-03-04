@@ -1,48 +1,58 @@
 "use client";
 
-import { useState } from "react";
-import { ZoomIn, X } from "lucide-react";
+import { useState, useRef } from "react";
 
 export default function ZoomableImage({ src, alt }: { src: string; alt: string }) {
   const [isZoomed, setIsZoomed] = useState(false);
+  const [position, setPosition] = useState({ x: 50, y: 50 });
+  const imageRef = useRef<HTMLImageElement>(null);
+
+  const updatePosition = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (imageRef.current) {
+      const { left, top, width, height } = imageRef.current.getBoundingClientRect();
+      const x = Math.max(0, Math.min(100, ((e.clientX - left) / width) * 100));
+      const y = Math.max(0, Math.min(100, ((e.clientY - top) / height) * 100));
+      setPosition({ x, y });
+    }
+  };
+
+  const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isZoomed) {
+      updatePosition(e);
+      setIsZoomed(true);
+    } else {
+      setIsZoomed(false);
+    }
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (isZoomed) {
+      updatePosition(e);
+    }
+  };
+
+  const handleMouseLeave = () => {
+    if (isZoomed) setIsZoomed(false);
+  };
 
   return (
-    <>
-      <div 
-        className="relative group cursor-zoom-in w-full aspect-[63/88] rounded-[24px] overflow-hidden border border-border shadow-md hover:shadow-xl transition-all"
-        onClick={() => setIsZoomed(true)}
-      >
-        <img src={src} alt={alt} className="w-full h-full object-cover" />
-        <div className="absolute inset-0 bg-background/0 group-hover:bg-background/10 transition-colors flex items-center justify-center">
-          <div className="w-12 h-12 rounded-full bg-background/80 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity transform scale-90 group-hover:scale-100 text-foreground">
-            <ZoomIn size={24} />
-          </div>
-        </div>
-      </div>
-
-      {isZoomed && (
-        <div 
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-background/90 backdrop-blur-md p-4 sm:p-8 cursor-zoom-out"
-          onClick={() => setIsZoomed(false)}
-        >
-          <button 
-            className="absolute top-6 right-6 p-3 bg-foreground text-background rounded-full hover:scale-110 transition-transform shadow-lg z-50"
-            onClick={(e) => {
-              e.stopPropagation();
-              setIsZoomed(false);
-            }}
-          >
-            <X size={24} strokeWidth={2.5} />
-          </button>
-          
-          <img 
-            src={src} 
-            alt={alt} 
-            className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl"
-            onClick={(e) => e.stopPropagation()} 
-          />
-        </div>
-      )}
-    </>
+    <div 
+      className={`relative w-full aspect-[63/88] rounded-[24px] overflow-hidden border border-border shadow-md ${isZoomed ? 'cursor-zoom-out' : 'cursor-zoom-in'}`}
+      onClick={handleClick}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
+    >
+      <img 
+        ref={imageRef}
+        src={src} 
+        alt={alt} 
+        className="w-full h-full object-cover"
+        style={{ 
+          transform: isZoomed ? 'scale(2.5)' : 'scale(1)', 
+          transformOrigin: `${position.x}% ${position.y}%`,
+          transition: isZoomed ? 'transform 0.2s ease-out' : 'transform 0.3s ease-out, transform-origin 0.3s ease-out'
+        }}
+      />
+    </div>
   );
 }
