@@ -16,7 +16,7 @@ export default function AdminTableView({ initialCards, availableSets }: { initia
 
   const supabase = createClient();
 
-  const expansions = useMemo(() => ["Semua", ...Array.from(new Set(availableSets.map(s => `${s.name} (${s.code})`)))], [availableSets]);
+  const expansions = useMemo(() => ["Semua", ...availableSets.map(s => `${s.name} (${s.code})`)], [availableSets]);
 
   const filteredCards = useMemo(() => {
     let filtered = cards;
@@ -33,6 +33,10 @@ export default function AdminTableView({ initialCards, availableSets }: { initia
     }
     
     return filtered.sort((a, b) => {
+      const orderSetA = a.sets?.set_order || 99;
+      const orderSetB = b.sets?.set_order || 99;
+      if (orderSetA !== orderSetB) return orderSetA - orderSetB;
+      
       const numA = parseInt((a.card_number || "0").replace(/\D/g, "")) || 0;
       const numB = parseInt((b.card_number || "0").replace(/\D/g, "")) || 0;
       if (numA !== numB) return numA - numB;
@@ -135,7 +139,7 @@ export default function AdminTableView({ initialCards, availableSets }: { initia
             : c
         ));
       } else {
-        const { data, error } = await supabase.from("cards").insert(payload).select("*, sets(name, code)").single();
+        const { data, error } = await supabase.from("cards").insert(payload).select("*, sets(name, code, set_order)").single();
         if (error) throw error;
         
         setCards([...cards, data]);
@@ -165,25 +169,24 @@ export default function AdminTableView({ initialCards, availableSets }: { initia
 
   return (
     <div className="flex flex-col gap-6">
-      
-      <div className="flex flex-col md:flex-row gap-4 items-end justify-between p-5 bg-muted/30 border border-border/50 rounded-[20px]">
-        <div className="flex flex-col sm:flex-row items-end gap-4 w-full md:w-auto flex-1">
-          <div className="relative w-full sm:max-w-xs flex flex-col gap-1.5">
+      <div className="flex flex-col lg:flex-row gap-4 items-end justify-between p-5 bg-muted/30 border border-border/50 rounded-[20px]">
+        <div className="flex flex-col lg:flex-row items-end gap-4 w-full flex-1">
+          <div className="relative w-full lg:flex-[2] flex flex-col gap-1.5">
             <span className="text-[10px] font-bold uppercase tracking-widest text-foreground/50 ml-1">Pencarian</span>
             <div className="relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-foreground/40" size={18} />
               <input 
                 type="text" placeholder="Cari nama atau nomor..." 
                 value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-11 pr-4 py-2.5 bg-background border border-border/60 rounded-xl focus:outline-none focus:border-foreground/30 text-sm font-semibold shadow-sm"
+                className="w-full pl-11 pr-4 h-[40px] bg-background border border-border/60 rounded-xl focus:outline-none focus:border-foreground/30 text-sm font-semibold shadow-sm"
               />
             </div>
           </div>
-          <div className="w-full sm:w-56">
+          <div className="w-full lg:flex-[1] min-w-[250px]">
             <CustomDropdown label="Filter Ekspansi" options={expansions} value={expansionFilter} onChange={setExpansionFilter} />
           </div>
         </div>
-        <button onClick={() => openModal()} className="w-full md:w-auto flex items-center justify-center gap-2 px-5 py-2.5 bg-foreground text-background font-bold text-sm rounded-xl hover:scale-105 transition-transform shadow-md whitespace-nowrap">
+        <button onClick={() => openModal()} className="w-full lg:w-auto flex items-center justify-center gap-2 px-5 h-[40px] bg-foreground text-background font-bold text-sm rounded-xl hover:scale-105 transition-transform shadow-md whitespace-nowrap">
           <Plus size={18} /> Tambah Kartu
         </button>
       </div>
@@ -239,15 +242,12 @@ export default function AdminTableView({ initialCards, availableSets }: { initia
       {isModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
           <div className="bg-background w-full max-w-4xl max-h-[90vh] flex flex-col rounded-3xl shadow-2xl border border-border overflow-hidden animate-in fade-in zoom-in-95">
-            
             <div className="px-6 py-4 border-b border-border flex items-center justify-between bg-muted/30">
               <h3 className="font-extrabold text-xl">{editingId ? "Edit Detail Kartu" : "Tambah Kartu Baru"}</h3>
               <button onClick={closeModal} className="p-2 hover:bg-muted rounded-full transition-colors"><X size={20} /></button>
             </div>
-
             <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                
                 <div className="space-y-4">
                   <div><label className="text-xs font-bold text-foreground/60">Ekspansi (Set)</label>
                     <select name="set_id" value={formData.set_id} onChange={handleChange} className="w-full mt-1 p-2.5 bg-background border rounded-lg text-sm">
@@ -280,12 +280,10 @@ export default function AdminTableView({ initialCards, availableSets }: { initia
                     <input type="text" name="image_url" value={formData.image_url || ""} onChange={handleChange} className="w-full mt-1 p-2.5 bg-background border rounded-lg text-sm" />
                   </div>
                 </div>
-
                 <div className="space-y-4">
                   <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl">
                     <span className="text-xs font-bold text-blue-600 uppercase tracking-wider mb-2 block">Mode Developer (Format JSON)</span>
                     <p className="text-[11px] text-foreground/70 leading-relaxed mb-3">Kolom di bawah ini wajib diisi menggunakan struktur array/objek JSON murni untuk mendukung elemen visual di website.</p>
-                    
                     <div className="space-y-3">
                       <div><label className="text-xs font-bold">Data Serangan (Attacks)</label>
                         <textarea name="attacks" value={formData.attacks || ""} onChange={handleChange} rows={5} className="w-full mt-1 p-2 font-mono text-[10px] bg-background border border-border/60 rounded-lg custom-scrollbar" placeholder='[{"name": "Scratch", "damage": "20", "cost": ["url1"], "effect": ""}]'></textarea>
@@ -299,17 +297,14 @@ export default function AdminTableView({ initialCards, availableSets }: { initia
                     </div>
                   </div>
                 </div>
-
               </div>
             </div>
-
             <div className="px-6 py-4 border-t border-border flex items-center justify-between bg-muted/20">
               {editingId ? (
                 <button onClick={handleDelete} disabled={isSaving} className="px-4 py-2 bg-red-500/10 text-red-600 font-bold text-sm rounded-xl flex items-center gap-2 hover:bg-red-500/20 transition-colors">
                   <Trash2 size={16} /> Hapus
                 </button>
               ) : <div></div>}
-              
               <div className="flex items-center gap-3">
                 <button onClick={closeModal} disabled={isSaving} className="px-4 py-2 font-bold text-sm text-foreground/60 hover:text-foreground">Batal</button>
                 <button onClick={handleSave} disabled={isSaving} className="px-6 py-2.5 bg-foreground text-background font-bold text-sm rounded-xl flex items-center gap-2 hover:scale-105 transition-transform disabled:opacity-50">
@@ -317,11 +312,9 @@ export default function AdminTableView({ initialCards, availableSets }: { initia
                 </button>
               </div>
             </div>
-
           </div>
         </div>
       )}
-
     </div>
   );
 }

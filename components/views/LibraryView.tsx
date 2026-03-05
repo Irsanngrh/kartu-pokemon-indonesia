@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import PokemonCard from "@/components/ui/PokemonCard";
 import CustomDropdown from "@/components/ui/CustomDropdown";
-import { Search, ArrowUp, Loader2 } from "lucide-react";
+import { Search, ArrowUp, Loader2, Info } from "lucide-react";
 
 let globalSession = {
   searchQuery: "",
@@ -21,24 +21,19 @@ let globalScrollY = 0;
 
 function getCardType(card: any) {
   if (card.hp) return "Pokémon";
-  
   const stage = (card.stage || "").toLowerCase();
-  
   if (stage.includes("supporter")) return "Supporter";
   if (stage.includes("stadium")) return "Stadium";
   if (stage.includes("tool")) return "Pokémon Tool";
   if (stage.includes("item")) return "Item";
   if (stage.includes("energy") || stage.includes("energi")) return "Energy";
-  
   return "Lainnya";
 }
 
 function getElements(card: any) {
   if (!card.types) return [];
-  
   return card.types.map((url: string) => {
     const u = url.toLowerCase();
-    
     if (u.includes("grass")) return "Rumput";
     if (u.includes("fire")) return "Api";
     if (u.includes("water")) return "Air";
@@ -50,7 +45,6 @@ function getElements(card: any) {
     if (u.includes("fairy")) return "Peri";
     if (u.includes("dragon")) return "Naga";
     if (u.includes("colorless")) return "Normal";
-    
     return "Lainnya";
   });
 }
@@ -61,37 +55,23 @@ function getStageInfo(card: any) {
   const stageLower = stageRaw.toLowerCase();
 
   let base = "Lainnya";
-
-  if (stageLower.includes("basic") || stageLower === "basic") {
-    base = "Basic";
-  } else if (stageLower.includes("stage 1")) {
-    base = "Stage 1";
-  } else if (stageLower.includes("stage 2")) {
-    base = "Stage 2";
-  } else if (stageRaw) {
-    base = stageRaw;
-  }
+  if (stageLower.includes("basic") || stageLower === "basic") base = "Basic";
+  else if (stageLower.includes("stage 1")) base = "Stage 1";
+  else if (stageLower.includes("stage 2")) base = "Stage 2";
+  else if (stageRaw) base = stageRaw;
 
   if (nameUpper.includes("VMAX")) return { categories: ["VMAX"] };
   if (nameUpper.includes("VSTAR")) return { categories: ["VSTAR"] };
 
   let suffix = "";
-
-  if (nameUpper.endsWith(" EX") || nameUpper.includes(" EX ")) {
-    suffix = "EX";
-  } else if (nameUpper.includes("GX")) {
-    suffix = "GX";
-  } else if (nameUpper.endsWith(" V") || nameUpper.includes(" V ")) {
-    suffix = "V";
-  }
+  if (nameUpper.endsWith(" EX") || nameUpper.includes(" EX ")) suffix = "EX";
+  else if (nameUpper.includes("GX")) suffix = "GX";
+  else if (nameUpper.endsWith(" V") || nameUpper.includes(" V ")) suffix = "V";
 
   if (suffix) {
-    if (base === "Basic" || base === "Stage 1" || base === "Stage 2") {
-      return { categories: [base, suffix] };
-    }
+    if (base === "Basic" || base === "Stage 1" || base === "Stage 2") return { categories: [base, suffix] };
     return { categories: [suffix] };
   }
-  
   return { categories: [base] };
 }
 
@@ -105,6 +85,7 @@ export default function LibraryView({ initialCards }: { initialCards: any[] }) {
   const [regulationFilter, setRegulationFilter] = useState(globalSession.regulationFilter);
   const [rarityFilter, setRarityFilter] = useState(globalSession.rarityFilter);
   const [visibleCount, setVisibleCount] = useState(globalSession.visibleCount);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const filterRef = useRef<HTMLDivElement>(null);
   const loaderRef = useRef<HTMLDivElement>(null);
@@ -113,6 +94,11 @@ export default function LibraryView({ initialCards }: { initialCards: any[] }) {
   const [isInitialized, setIsInitialized] = useState(false);
   const isRestoring = useRef(globalScrollY > 0);
   const isFirstRender = useRef(true);
+
+  const showToast = (message: string) => {
+    setToastMessage(message);
+    setTimeout(() => setToastMessage(null), 3500);
+  };
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -143,9 +129,7 @@ export default function LibraryView({ initialCards }: { initialCards: any[] }) {
             setRegulationFilter(parsed.regulationFilter || "Semua");
             setRarityFilter(parsed.rarityFilter || "Semua");
             setVisibleCount(parsed.visibleCount || 30);
-          } catch (e) {
-            
-          }
+          } catch (e) {}
         }
       }
       setIsInitialized(true);
@@ -195,8 +179,21 @@ export default function LibraryView({ initialCards }: { initialCards: any[] }) {
   }, [isInitialized]);
 
   const expansions = useMemo(() => {
-    const setList = initialCards.map(c => c.sets ? `${c.sets.name} (${c.sets.code})` : "").filter(Boolean);
-    return ["Semua", ...Array.from(new Set(setList)).sort((a, b) => a.localeCompare(b))];
+    const setMap = new Map();
+    initialCards.forEach(c => {
+      if (c.sets) {
+        const key = `${c.sets.name} (${c.sets.code})`;
+        if (!setMap.has(key)) {
+          setMap.set(key, c.sets.set_order || 99);
+        }
+      }
+    });
+    
+    const sortedSets = Array.from(setMap.entries())
+      .sort((a, b) => a[1] - b[1])
+      .map(e => e[0]);
+      
+    return ["Semua", ...sortedSets];
   }, [initialCards]);
 
   const cardTypes = ["Semua", "Pokémon", "Item", "Supporter", "Stadium", "Pokémon Tool", "Energy"];
@@ -261,9 +258,9 @@ export default function LibraryView({ initialCards }: { initialCards: any[] }) {
     });
 
     return filtered.sort((a, b) => {
-      const setA = a.sets?.code || "";
-      const setB = b.sets?.code || "";
-      if (setA !== setB) return setB.localeCompare(setA);
+      const orderSetA = a.sets?.set_order || 99;
+      const orderSetB = b.sets?.set_order || 99;
+      if (orderSetA !== orderSetB) return orderSetA - orderSetB;
       
       const numA = parseInt((a.card_number || "0").replace(/\D/g, "")) || 0;
       const numB = parseInt((b.card_number || "0").replace(/\D/g, "")) || 0;
@@ -332,36 +329,71 @@ export default function LibraryView({ initialCards }: { initialCards: any[] }) {
   };
 
   return (
-    <div className="flex flex-col gap-8 pb-10 pt-6">
+    <div className="flex flex-col gap-8 pb-10 pt-6 relative w-full">
+      {toastMessage && (
+        <div className="fixed top-20 sm:top-24 left-1/2 -translate-x-1/2 z-[100] w-[90%] sm:w-fit max-w-[360px] sm:max-w-none bg-foreground text-background px-4 sm:px-6 py-3 sm:py-3.5 rounded-2xl sm:rounded-full shadow-2xl font-bold text-[13px] sm:text-sm flex items-center justify-center sm:justify-start gap-3 transition-all animate-in fade-in slide-in-from-top-4 text-center sm:text-left leading-relaxed sm:whitespace-nowrap">
+          <Info size={18} className="text-background shrink-0" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
       <header className="flex flex-col gap-1">
         <h1 className="text-3xl font-extrabold tracking-tight">Koleksi Kartu</h1>
         <p className="text-foreground/50 text-sm font-medium">Jelajahi dan saring database kartu Pokémon Indonesia.</p>
       </header>
-
       <div ref={filterRef} className="relative z-40 flex flex-col gap-5 p-5 md:p-6 bg-muted/30 border border-border/50 rounded-[20px]">
-        <div className="relative w-full">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-foreground/40" size={18} />
-          <input 
-            type="text" 
-            placeholder="Cari nama kartu Pokémon..." 
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-11 pr-4 py-3 bg-background border border-border/50 rounded-xl focus:outline-none focus:border-foreground/30 focus:ring-1 focus:ring-foreground/30 text-sm font-semibold transition-all shadow-sm"
-          />
-        </div>
-
-        <div className="flex flex-wrap gap-3 lg:gap-4">
-          <div className="w-full md:flex-1 md:min-w-[160px]">
+        <div className="flex flex-col lg:flex-row gap-4 w-full items-end">
+          <div className="relative w-full lg:flex-[2] flex flex-col gap-1.5">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-foreground/50 ml-1">Pencarian</span>
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-foreground/40" size={18} />
+              <input 
+                type="text" 
+                placeholder="Cari nama kartu Pokémon..." 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-11 pr-4 h-[40px] bg-background border border-border/50 rounded-xl focus:outline-none focus:border-foreground/30 focus:ring-1 focus:ring-foreground/30 text-sm font-semibold transition-all shadow-sm"
+              />
+            </div>
+          </div>
+          <div className="w-full lg:flex-[1] min-w-[250px]">
             <CustomDropdown label="Ekspansi" options={expansions} value={expansionFilter} onChange={setExpansionFilter} />
           </div>
+        </div>
+        <div className="flex flex-wrap gap-3 lg:gap-4">
           <div className="flex-1 min-w-[130px] md:min-w-[160px]">
             <CustomDropdown label="Jenis Kartu" options={cardTypes} value={cardTypeFilter} onChange={handleCardTypeChange} />
           </div>
-          <div className="flex-1 min-w-[130px] md:min-w-[160px]">
-            <CustomDropdown label="Elemen (Pokémon)" options={elements} value={elementFilter} onChange={setElementFilter} disabled={cardTypeFilter !== "Pokémon"} disabledText="Pilih Pokémon" />
+          <div className="flex-1 min-w-[130px] md:min-w-[160px] relative">
+            <CustomDropdown 
+              label="Elemen (Pokémon)" 
+              options={elements} 
+              value={cardTypeFilter !== "Pokémon" ? "Semua" : elementFilter} 
+              onChange={setElementFilter} 
+              disabled={cardTypeFilter !== "Pokémon"} 
+              disabledText="Semua" 
+            />
+            {cardTypeFilter !== "Pokémon" && (
+              <div 
+                className="absolute inset-0 z-10 cursor-pointer" 
+                onClick={() => showToast("Pilih Jenis Kartu \"Pokémon\" terlebih dahulu.")}
+              />
+            )}
           </div>
-          <div className="flex-1 min-w-[130px] md:min-w-[160px]">
-            <CustomDropdown label="Stage (Pokémon)" options={stages} value={stageFilter} onChange={setStageFilter} disabled={cardTypeFilter !== "Pokémon"} disabledText="Pilih Pokémon" />
+          <div className="flex-1 min-w-[130px] md:min-w-[160px] relative">
+            <CustomDropdown 
+              label="Stage (Pokémon)" 
+              options={stages} 
+              value={cardTypeFilter !== "Pokémon" ? "Semua" : stageFilter} 
+              onChange={setStageFilter} 
+              disabled={cardTypeFilter !== "Pokémon"} 
+              disabledText="Semua" 
+            />
+            {cardTypeFilter !== "Pokémon" && (
+              <div 
+                className="absolute inset-0 z-10 cursor-pointer" 
+                onClick={() => showToast("Pilih Jenis Kartu \"Pokémon\" terlebih dahulu.")}
+              />
+            )}
           </div>
           <div className="flex-1 min-w-[130px] md:min-w-[160px]">
             <CustomDropdown label="Ilustrator" options={illustrators} value={illustratorFilter} onChange={setIllustratorFilter} />
@@ -374,11 +406,9 @@ export default function LibraryView({ initialCards }: { initialCards: any[] }) {
           </div>
         </div>
       </div>
-
       <div className="flex items-center justify-between text-[11px] font-bold text-foreground/40 tracking-widest uppercase border-b border-border/40 pb-2">
         <span>Menampilkan {filteredCards.length} Kartu</span>
       </div>
-
       <div className="relative z-10 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-5">
         {displayedCards.map((card) => (
           <PokemonCard key={card.id} card={card} source="library" />
@@ -390,13 +420,11 @@ export default function LibraryView({ initialCards }: { initialCards: any[] }) {
           </div>
         )}
       </div>
-
       {hasMoreCards && (
         <div ref={loaderRef} className="w-full py-10 flex justify-center items-center">
           <Loader2 className="animate-spin text-foreground/30" size={36} />
         </div>
       )}
-
       {showScrollTop && (
         <button
           onClick={scrollToFilters}

@@ -16,11 +16,14 @@ export default function CardDetailView({ initialCards }: { initialCards: any[] }
   const [activeIndex, setActiveIndex] = useState(0);
   const [userId, setUserId] = useState<string | null>(null);
   const [collectionMap, setCollectionMap] = useState<Record<string, CollectionData>>({});
-  const [isLoading, setIsLoading] = useState(false);
+  const [isQuantityLoading, setIsQuantityLoading] = useState(false);
+  const [isWishlistLoading, setIsWishlistLoading] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [inputValue, setInputValue] = useState("");
 
   const searchParams = useSearchParams();
   const fromSource = searchParams.get("from");
+  const variantParam = searchParams.get("variant");
 
   let backUrl = "/";
   let backText = "Kembali ke Library";
@@ -33,8 +36,21 @@ export default function CardDetailView({ initialCards }: { initialCards: any[] }
     backText = "Kembali ke Wishlist";
   }
 
-  const card = initialCards[activeIndex];
   const [supabase] = useState(() => createClient());
+
+  useEffect(() => {
+    if (variantParam && initialCards.length > 0) {
+      const idx = initialCards.findIndex(c => {
+        const vName = c.variant_name ? c.variant_name.toLowerCase().replace(/\s+/g, '-') : "";
+        return vName === variantParam;
+      });
+      if (idx !== -1) {
+        setActiveIndex(idx);
+      }
+    }
+  }, [variantParam, initialCards]);
+
+  const card = initialCards[activeIndex];
 
   useEffect(() => {
     let isMounted = true;
@@ -68,14 +84,20 @@ export default function CardDetailView({ initialCards }: { initialCards: any[] }
     };
   }, [initialCards, supabase]);
 
+  useEffect(() => {
+    setInputValue((collectionMap[card.id]?.quantity || 0).toString());
+  }, [activeIndex, collectionMap, card.id]);
+
   const showToast = (message: string) => {
     setToastMessage(message);
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  const updateDatabase = async (cardId: string, newData: CollectionData) => {
+  const updateDatabase = async (cardId: string, newData: CollectionData, loadingType: "quantity" | "wishlist") => {
     if (!userId) return;
-    setIsLoading(true);
+    
+    if (loadingType === "quantity") setIsQuantityLoading(true);
+    if (loadingType === "wishlist") setIsWishlistLoading(true);
     
     const { data: existing } = await supabase
       .from("user_collections")
@@ -105,7 +127,9 @@ export default function CardDetailView({ initialCards }: { initialCards: any[] }
     }
     
     setCollectionMap(prev => ({ ...prev, [cardId]: newData }));
-    setIsLoading(false);
+    
+    if (loadingType === "quantity") setIsQuantityLoading(false);
+    if (loadingType === "wishlist") setIsWishlistLoading(false);
   };
 
   const handleQuantityChange = (amount: number) => {
@@ -116,7 +140,25 @@ export default function CardDetailView({ initialCards }: { initialCards: any[] }
     
     const currentData = collectionMap[card.id] || { quantity: 0, is_wishlist: false };
     const newQuantity = Math.max(0, currentData.quantity + amount);
-    updateDatabase(card.id, { ...currentData, quantity: newQuantity });
+    updateDatabase(card.id, { ...currentData, quantity: newQuantity }, "quantity");
+  };
+
+  const handleInputBlur = () => {
+    if (!userId) {
+      showToast("Silakan login terlebih dahulu untuk menambahkan ke koleksi.");
+      setInputValue("0");
+      return;
+    }
+    
+    let val = parseInt(inputValue);
+    if (isNaN(val) || val < 0) val = 0;
+    
+    setInputValue(val.toString());
+    
+    const currentData = collectionMap[card.id] || { quantity: 0, is_wishlist: false };
+    if (val !== currentData.quantity) {
+      updateDatabase(card.id, { ...currentData, quantity: val }, "quantity");
+    }
   };
 
   const toggleWishlist = () => {
@@ -126,7 +168,7 @@ export default function CardDetailView({ initialCards }: { initialCards: any[] }
     }
     
     const currentData = collectionMap[card.id] || { quantity: 0, is_wishlist: false };
-    updateDatabase(card.id, { ...currentData, is_wishlist: !currentData.is_wishlist });
+    updateDatabase(card.id, { ...currentData, is_wishlist: !currentData.is_wishlist }, "wishlist");
   };
 
   const cardStage = (() => {
@@ -169,23 +211,20 @@ export default function CardDetailView({ initialCards }: { initialCards: any[] }
   const currentCollection = collectionMap[card.id] || { quantity: 0, is_wishlist: false };
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pb-20 pt-8 relative">
-      
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pb-20 pt-8 relative w-full">
       {toastMessage && (
-        <div className="fixed top-20 sm:top-24 left-1/2 -translate-x-1/2 z-[100] w-[90%] sm:w-auto max-w-[360px] sm:max-w-md bg-foreground text-background px-4 sm:px-6 py-3 sm:py-3.5 rounded-2xl sm:rounded-full shadow-2xl font-bold text-[13px] sm:text-sm flex items-center justify-center sm:justify-start gap-3 transition-all animate-in fade-in slide-in-from-top-4 text-center sm:text-left leading-relaxed">
+        <div className="fixed top-20 sm:top-24 left-1/2 -translate-x-1/2 z-[100] w-[90%] sm:w-fit max-w-[360px] sm:max-w-none bg-foreground text-background px-4 sm:px-6 py-3 sm:py-3.5 rounded-2xl sm:rounded-full shadow-2xl font-bold text-[13px] sm:text-sm flex items-center justify-center sm:justify-start gap-3 transition-all animate-in fade-in slide-in-from-top-4 text-center sm:text-left leading-relaxed sm:whitespace-nowrap">
           <Info size={18} className="text-background shrink-0" />
           <span>{toastMessage}</span>
         </div>
       )}
-
       <div className="mb-6">
         <Link href={backUrl} className="inline-flex items-center gap-2 text-sm text-foreground/50 hover:text-foreground transition-colors w-fit font-medium">
           <ChevronLeft size={16} /> {backText}
         </Link>
       </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-14 items-start">
-        <div className="lg:col-span-5 flex flex-col items-center gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-14 items-start w-full">
+        <div className="lg:col-span-5 flex flex-col items-center gap-6 w-full">
           <div className="w-full max-w-[380px] lg:max-w-full relative">
             {card.image_url ? (
               <ZoomableImage key={card.id} src={card.image_url} alt={card.name} />
@@ -200,28 +239,33 @@ export default function CardDetailView({ initialCards }: { initialCards: any[] }
               </div>
             )}
           </div>
-
           <div className="w-full max-w-[380px] lg:max-w-full flex gap-3">
             <div className="flex-1 flex items-center justify-between bg-muted/30 border border-border/60 rounded-xl p-1.5">
-              <button onClick={() => handleQuantityChange(-1)} disabled={isLoading || currentCollection.quantity === 0} className="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-background border border-transparent hover:border-border/60 transition-all disabled:opacity-30">
+              <button onClick={() => handleQuantityChange(-1)} disabled={isQuantityLoading || currentCollection.quantity === 0} className="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-background border border-transparent hover:border-border/60 transition-all disabled:opacity-30">
                 <Minus size={18} />
               </button>
-              <div className="flex flex-col items-center">
-                <span className="text-xs font-bold uppercase tracking-widest text-foreground/50">Koleksi</span>
-                <span className="font-black text-lg leading-none">{currentCollection.quantity}</span>
+              <div className="flex flex-col items-center justify-center w-20">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-foreground/50 mb-0.5">Koleksi</span>
+                <input 
+                  type="number" 
+                  value={inputValue} 
+                  onChange={(e) => setInputValue(e.target.value)}
+                  onBlur={handleInputBlur}
+                  onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                  disabled={isQuantityLoading}
+                  className="w-full text-center font-black text-xl leading-none bg-transparent border-none outline-none focus:ring-2 focus:ring-foreground/20 rounded-md [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none transition-all"
+                />
               </div>
-              <button onClick={() => handleQuantityChange(1)} disabled={isLoading} className="w-10 h-10 flex items-center justify-center rounded-lg bg-foreground text-background hover:scale-105 transition-all disabled:opacity-50">
+              <button onClick={() => handleQuantityChange(1)} disabled={isQuantityLoading} className="w-10 h-10 flex items-center justify-center rounded-lg bg-foreground text-background hover:scale-105 transition-all disabled:opacity-50">
                 <Plus size={18} />
               </button>
             </div>
-            
-            <button onClick={toggleWishlist} disabled={isLoading} className={`w-14 flex items-center justify-center rounded-xl border transition-all disabled:opacity-50 ${currentCollection.is_wishlist ? 'bg-red-500/10 border-red-500/30 text-red-500' : 'bg-muted/30 border-border/60 text-foreground/50 hover:text-foreground hover:bg-background'}`}>
+            <button onClick={toggleWishlist} disabled={isWishlistLoading} className={`w-14 flex items-center justify-center rounded-xl border transition-all disabled:opacity-50 ${currentCollection.is_wishlist ? 'bg-red-500/10 border-red-500/30 text-red-500' : 'bg-muted/30 border-border/60 text-foreground/50 hover:text-foreground hover:bg-background'}`}>
               <Heart size={20} className={currentCollection.is_wishlist ? "fill-current" : ""} />
             </button>
           </div>
         </div>
-
-        <div className="lg:col-span-7 flex flex-col gap-6">
+        <div className="lg:col-span-7 flex flex-col gap-6 w-full">
           <div className="flex flex-col gap-1">
             <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight">{card.name}</h1>
             <div className="flex flex-wrap items-center gap-2 mt-1">
@@ -230,7 +274,6 @@ export default function CardDetailView({ initialCards }: { initialCards: any[] }
                 <><span className="text-foreground/30 px-1">•</span><span className="text-xs font-semibold text-foreground/60">Evolusi: {card.evolution.join(" → ")}</span></>
               )}
             </div>
-
             {initialCards.length > 1 && (
               <div className="mt-5 flex flex-col gap-2.5">
                 <span className="text-[10px] font-bold uppercase tracking-widest text-foreground/40">Varian Kartu</span>
@@ -243,7 +286,17 @@ export default function CardDetailView({ initialCards }: { initialCards: any[] }
                     return (
                       <button
                         key={variantCard.id}
-                        onClick={() => setActiveIndex(idx)}
+                        onClick={() => {
+                          setActiveIndex(idx);
+                          const params = new URLSearchParams(searchParams.toString());
+                          if (variantCard.variant_name) {
+                            params.set('variant', variantCard.variant_name.toLowerCase().replace(/\s+/g, '-'));
+                          } else {
+                            params.delete('variant');
+                          }
+                          const qs = params.toString() ? `?${params.toString()}` : '';
+                          window.history.pushState(null, '', window.location.pathname + qs);
+                        }}
                         className={`px-4 py-2 text-xs font-bold rounded-xl transition-all border flex items-center gap-2 ${
                           activeIndex === idx ? 'bg-foreground text-background border-foreground shadow-md' : 'bg-background text-foreground/70 border-border/60 hover:border-foreground/40 hover:bg-muted/30'
                         }`}
@@ -256,7 +309,6 @@ export default function CardDetailView({ initialCards }: { initialCards: any[] }
                 </div>
               </div>
             )}
-            
             <div className="flex flex-wrap items-center gap-5 mt-5">
               {Number(card.hp) > 0 && (
                 <div className="flex items-center gap-1.5">
@@ -278,7 +330,6 @@ export default function CardDetailView({ initialCards }: { initialCards: any[] }
                 </>
               )}
             </div>
-
             {(card.pokedex_number || card.species || card.height || card.weight) && (
               <div className="mt-4 flex flex-wrap items-center gap-2.5 text-xs font-medium text-foreground/50">
                 {card.pokedex_number && <span>Pokédex No. {card.pokedex_number.replace(/No\.?/ig, '').trim()}</span>}
@@ -290,24 +341,22 @@ export default function CardDetailView({ initialCards }: { initialCards: any[] }
                 {card.weight && <span>Berat: {card.weight.replace(/kg/ig, '').trim()} kg</span>}
               </div>
             )}
-            
             {card.description && <p className="text-foreground/70 leading-relaxed italic text-sm mt-1">"{card.description}"</p>}
           </div>
-
           <hr className="border-border/60" />
-
           {card.attacks && card.attacks.length > 0 && (
             <div className="flex flex-col gap-3">
               {card.attacks.map((attack: any, index: number) => {
                 const validCost = attack.cost && attack.cost.length > 0;
                 const validName = attack.name && attack.name.trim() !== "";
                 const validDamage = attack.damage && attack.damage.trim() !== "";
+                const validEffect = attack.effect && attack.effect.trim() !== "";
                 const hasHeader = validCost || validName || validDamage;
-                
+                if (!hasHeader && !validEffect) return null;
                 return (
                   <div key={index} className="flex flex-col justify-center p-5 rounded-[20px] bg-background border border-border/80 shadow-sm hover:border-foreground/20 transition-colors">
                     {hasHeader && (
-                      <div className="flex items-start justify-between gap-4 mb-3">
+                      <div className={`flex items-start justify-between gap-4 ${validEffect ? 'mb-3' : ''}`}>
                         <div className="flex items-center gap-4 flex-wrap">
                           {validCost && (
                             <div className="flex items-center gap-1">
@@ -321,16 +370,15 @@ export default function CardDetailView({ initialCards }: { initialCards: any[] }
                         {validDamage && <span className="font-black text-xl whitespace-nowrap">{attack.damage}</span>}
                       </div>
                     )}
-                    {attack.effect && <p className="text-sm text-foreground/70 leading-relaxed">{attack.effect}</p>}
+                    {validEffect && <p className="text-sm text-foreground/70 leading-relaxed">{attack.effect}</p>}
                   </div>
                 );
               })}
             </div>
           )}
-
           {Number(card.hp) > 0 && (
-            <div className="grid grid-cols-3 divide-x divide-border/60 border border-border/60 rounded-[20px] bg-background">
-              <div className="flex flex-col items-center justify-center p-4 gap-1.5">
+            <div className="grid grid-cols-3 gap-px bg-border/60 border border-border/60 rounded-[20px] overflow-hidden">
+              <div className="flex flex-col items-center justify-center p-4 gap-1.5 bg-background">
                 <span className="text-foreground/40 text-[10px] font-bold uppercase tracking-widest">Kelemahan</span>
                 <div className="flex items-center gap-1.5 font-bold text-sm">
                   {card.weakness?.type ? (
@@ -338,7 +386,7 @@ export default function CardDetailView({ initialCards }: { initialCards: any[] }
                   ) : (<span className="text-foreground/30">--</span>)}
                 </div>
               </div>
-              <div className="flex flex-col items-center justify-center p-4 gap-1.5">
+              <div className="flex flex-col items-center justify-center p-4 gap-1.5 bg-background">
                 <span className="text-foreground/40 text-[10px] font-bold uppercase tracking-widest">Resistansi</span>
                 <div className="flex items-center gap-1.5 font-bold text-sm">
                   {card.resistance?.type ? (
@@ -346,7 +394,7 @@ export default function CardDetailView({ initialCards }: { initialCards: any[] }
                   ) : (<span className="text-foreground/30">--</span>)}
                 </div>
               </div>
-              <div className="flex flex-col items-center justify-center p-4 gap-1.5">
+              <div className="flex flex-col items-center justify-center p-4 gap-1.5 bg-background">
                 <span className="text-foreground/40 text-[10px] font-bold uppercase tracking-widest">Mundur</span>
                 <div className="flex items-center gap-1">
                   {card.retreat_cost > 0 ? (
@@ -358,27 +406,26 @@ export default function CardDetailView({ initialCards }: { initialCards: any[] }
               </div>
             </div>
           )}
-
-          <div className="grid grid-cols-5 divide-x divide-border/60 border border-border/60 rounded-[20px] bg-background text-center">
-            <div className="flex flex-col p-3 md:p-4 gap-1 justify-center items-center">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-px bg-border/60 border border-border/60 rounded-[20px] text-center overflow-hidden">
+            <div className="flex flex-col p-3 md:p-4 gap-1 justify-center items-center bg-background col-span-2 sm:col-span-1">
               <span className="text-foreground/40 text-[9px] font-bold uppercase tracking-widest">Ilustrator</span>
               <span className="font-bold text-[11px] text-center break-words">{card.illustrator || "--"}</span>
             </div>
-            <div className="flex flex-col p-3 md:p-4 gap-1 justify-center items-center">
+            <div className="flex flex-col p-3 md:p-4 gap-1 justify-center items-center bg-background">
               <span className="text-foreground/40 text-[9px] font-bold uppercase tracking-widest">Ekspansi</span>
               {card.expansion_symbol_url ? (
                 <img src={card.expansion_symbol_url} alt="Symbol" className="h-4 w-auto object-contain drop-shadow-sm" />
               ) : (<span className="text-foreground/30 text-[11px] font-bold">--</span>)}
             </div>
-            <div className="flex flex-col p-3 md:p-4 gap-1 justify-center items-center">
+            <div className="flex flex-col p-3 md:p-4 gap-1 justify-center items-center bg-background">
               <span className="text-foreground/40 text-[9px] font-bold uppercase tracking-widest">Regulasi</span>
               <span className="font-bold text-[11px]">{card.regulation_mark || "--"}</span>
             </div>
-            <div className="flex flex-col p-3 md:p-4 gap-1 justify-center items-center">
+            <div className="flex flex-col p-3 md:p-4 gap-1 justify-center items-center bg-background">
               <span className="text-foreground/40 text-[9px] font-bold uppercase tracking-widest">No. Kartu</span>
               <span className="font-bold text-[11px]">{card.card_number || "--"}</span>
             </div>
-            <div className="flex flex-col p-3 md:p-4 gap-1 justify-center items-center">
+            <div className="flex flex-col p-3 md:p-4 gap-1 justify-center items-center bg-background">
               <span className="text-foreground/40 text-[9px] font-bold uppercase tracking-widest">Rarity</span>
               <span className="font-bold text-[11px]">{card.rarity || "--"}</span>
             </div>

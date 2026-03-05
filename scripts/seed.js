@@ -4,10 +4,9 @@ const path = require('path');
 require('dotenv').config({ path: '.env.local' });
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!supabaseUrl || !supabaseKey) {
-    console.error("Supabase credentials not found in .env.local");
     process.exit(1);
 }
 
@@ -32,46 +31,45 @@ const FILES_TO_SEED = [
 ];
 
 async function seedDatabase() {
-    console.log("Starting database seeding...\n");
-
-    for (const fileInfo of FILES_TO_SEED) {
+    for (let setIndex = 0; setIndex < FILES_TO_SEED.length; setIndex++) {
+        const fileInfo = FILES_TO_SEED[setIndex];
         const fullPath = path.join(__dirname, "..", fileInfo.filePath);
+        const targetOrder = setIndex + 1;
 
         if (!fs.existsSync(fullPath)) {
-            console.log(`[SKIP] File not found: ${fileInfo.filePath}`);
             continue;
         }
 
-        console.log(`Processing set: ${fileInfo.setName} (${fileInfo.setCode})`);
+        console.log(`\nProcessing: ${fileInfo.setName} (${fileInfo.setCode})`);
 
-        let { data: existingSet, error: setError } = await supabase
+        let { data: existingSet } = await supabase
             .from('sets')
-            .select('id')
+            .select('id, set_order')
             .eq('code', fileInfo.setCode)
             .single();
 
         if (!existingSet) {
-            console.log(`  -> Creating new set: ${fileInfo.setCode}`);
-            
-            const { data: newSet, error: insertSetError } = await supabase
+            const { data: newSet } = await supabase
                 .from('sets')
-                .insert({ code: fileInfo.setCode, name: fileInfo.setName })
+                .insert({ 
+                    code: fileInfo.setCode, 
+                    name: fileInfo.setName,
+                    set_order: targetOrder
+                })
                 .select()
                 .single();
-
-            if (insertSetError) {
-                console.error("Failed to create set:", insertSetError);
-                continue;
-            }
             
             existingSet = newSet;
+        } else if (existingSet.set_order !== targetOrder) {
+            await supabase
+                .from('sets')
+                .update({ set_order: targetOrder })
+                .eq('id', existingSet.id);
         }
 
         const rawData = fs.readFileSync(fullPath, 'utf8');
         const rawCards = JSON.parse(rawData);
         
-        console.log(`  -> Found ${rawCards.length} raw cards. Analyzing variants...`);
-
         const groupedCards = {};
         
         for (const card of rawCards) {
@@ -92,7 +90,7 @@ async function seedDatabase() {
                 let vName = null;
 
                 if (group.length > 1) {
-                    vName = order === 1 ? 'Normal' : 'Holo';
+                    vName = order === 1 ? 'Normal' : `Holo ${order - 1}`;
                 }
 
                 card.variant_order = order;
@@ -101,17 +99,12 @@ async function seedDatabase() {
             });
         }
 
-        console.log(`  -> Uploading ${processedCards.length} cards to database...`);
-
-        let successCount = 0;
-        let errorCount = 0;
-
         for (let i = 0; i < processedCards.length; i++) {
             const card = processedCards[i];
             
-            console.log(`     [${i + 1}/${processedCards.length}] Uploading: ${card.name} (${card.variant_name || 'Normal'})`);
+            console.log(`[${i + 1}/${processedCards.length}] Uploading: ${card.name}`);
 
-            const { error: insertCardError } = await supabase.from('cards').insert({
+            await supabase.from('cards').insert({
                 set_id: existingSet.id,
                 card_number: card.card_number || null,
                 name: card.name || "Unknown",
@@ -136,19 +129,8 @@ async function seedDatabase() {
                 variant_name: card.variant_name,
                 variant_order: card.variant_order
             });
-
-            if (insertCardError) {
-                console.error(`     [ERROR] Failed to upload ${card.name}:`, insertCardError.message);
-                errorCount++;
-            } else {
-                successCount++;
-            }
         }
-
-        console.log(`Finished processing ${fileInfo.setCode}. Success: ${successCount}, Failed: ${errorCount}\n`);
     }
-
-    console.log("Seeding completed successfully!");
 }
 
 seedDatabase();
