@@ -1,17 +1,19 @@
-import { createClient } from "@/utils/supabase/server";
 import LibraryView from "@/components/views/LibraryView";
+import { fetchCardsBasedOnFilters, fetchFilterOptions } from "@/app/actions/cards.fetch";
 
-export const revalidate = 0;
+export const revalidate = 3600;
 
 export default async function HomePage() {
-  const supabase = await createClient();
-  
-  const { data: cards, error } = await supabase
-    .from("cards")
-    .select("*, sets(name, code, set_order)")
-    .limit(10000);
+  const initialData = await fetchCardsBasedOnFilters({}, 0, 30);
+  const filterOptions = await fetchFilterOptions("Semua");
 
-  if (error) return <div className="p-10 text-center text-red-500">Gagal memuat database.</div>;
+  if (initialData.error) return <div className="p-10 text-center text-red-500">Gagal memuat database: {initialData.error}</div>;
 
-  return <LibraryView initialCards={cards || []} />;
+  return (
+    <LibraryView 
+      initialCards={initialData.cards} 
+      initialTotalCount={initialData.totalCount} 
+      initialFilterOptions={filterOptions} 
+    />
+  );
 }

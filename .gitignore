@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# scraped data — development-only, not for version control
+scraped_cards_*.json
+
+# scraping scripts — not part of the production app
+/scripts/

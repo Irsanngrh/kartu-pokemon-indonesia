@@ -6,13 +6,15 @@ import { useSearchParams } from "next/navigation";
 import { ChevronLeft, Plus, Minus, Heart, Bookmark, Info } from "lucide-react";
 import ZoomableImage from "@/components/ui/ZoomableImage";
 import { createClient } from "@/utils/supabase/client";
+import { updateCollectionAction } from "@/app/actions/collections";
+import { PokemonCard as PokemonCardType } from "@/types";
 
 interface CollectionData {
   quantity: number;
   is_wishlist: boolean;
 }
 
-export default function CardDetailView({ initialCards }: { initialCards: any[] }) {
+export default function CardDetailView({ initialCards }: { initialCards: PokemonCardType[] }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [userId, setUserId] = useState<string | null>(null);
   const [collectionMap, setCollectionMap] = useState<Record<string, CollectionData>>({});
@@ -93,40 +95,22 @@ export default function CardDetailView({ initialCards }: { initialCards: any[] }
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  const updateDatabase = async (cardId: string, newData: CollectionData, loadingType: "quantity" | "wishlist") => {
+  const updateDatabase = async (cardId: string | number, newData: CollectionData, loadingType: "quantity" | "wishlist") => {
     if (!userId) return;
     
     if (loadingType === "quantity") setIsQuantityLoading(true);
     if (loadingType === "wishlist") setIsWishlistLoading(true);
     
-    const { data: existing } = await supabase
-      .from("user_collections")
-      .select("id")
-      .eq("user_id", userId)
-      .eq("card_id", cardId)
-      .maybeSingle();
+    const { error } = await updateCollectionAction(cardId, newData.quantity, newData.is_wishlist);
     
-    if (newData.quantity === 0 && !newData.is_wishlist) {
-      if (existing) {
-        await supabase.from("user_collections").delete().eq("id", existing.id);
-      }
-    } else {
-      if (existing) {
-        await supabase.from("user_collections").update({ 
-          quantity: newData.quantity, 
-          is_wishlist: newData.is_wishlist 
-        }).eq("id", existing.id);
-      } else {
-        await supabase.from("user_collections").insert({ 
-          user_id: userId, 
-          card_id: cardId, 
-          quantity: newData.quantity, 
-          is_wishlist: newData.is_wishlist 
-        });
-      }
+    if (error) {
+      showToast("Gagal mengupdate koleksi: " + error);
+      if (loadingType === "quantity") setIsQuantityLoading(false);
+      if (loadingType === "wishlist") setIsWishlistLoading(false);
+      return;
     }
     
-    setCollectionMap(prev => ({ ...prev, [cardId]: newData }));
+    setCollectionMap(prev => ({ ...prev, [String(cardId)]: newData }));
     
     if (loadingType === "quantity") setIsQuantityLoading(false);
     if (loadingType === "wishlist") setIsWishlistLoading(false);
@@ -213,13 +197,13 @@ export default function CardDetailView({ initialCards }: { initialCards: any[] }
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pb-20 pt-8 relative w-full">
       {toastMessage && (
-        <div className="fixed top-20 sm:top-24 left-1/2 -translate-x-1/2 z-[100] w-[90%] sm:w-fit max-w-[360px] sm:max-w-none bg-foreground text-background px-4 sm:px-6 py-3 sm:py-3.5 rounded-2xl sm:rounded-full shadow-2xl font-bold text-[13px] sm:text-sm flex items-center justify-center sm:justify-start gap-3 transition-all animate-in fade-in slide-in-from-top-4 text-center sm:text-left leading-relaxed sm:whitespace-nowrap">
+        <div className="fixed top-20 sm:top-24 left-1/2 -translate-x-1/2 z-[100] w-[90%] sm:w-fit max-w-[360px] sm:max-w-none bg-foreground text-background px-4 sm:px-6 py-3 sm:py-3.5 rounded-2xl sm:rounded-full shadow-2xl  text-[13px] sm:text-sm flex items-center justify-center sm:justify-start gap-3 transition-all animate-in fade-in slide-in-from-top-4 text-center sm:text-left leading-relaxed sm:whitespace-nowrap">
           <Info size={18} className="text-background shrink-0" />
           <span>{toastMessage}</span>
         </div>
       )}
       <div className="mb-6">
-        <Link href={backUrl} className="inline-flex items-center gap-2 text-sm text-foreground/50 hover:text-foreground transition-colors w-fit font-medium">
+        <Link href={backUrl} className="inline-flex items-center gap-2 text-sm text-foreground/50 hover:text-foreground transition-colors w-fit ">
           <ChevronLeft size={16} /> {backText}
         </Link>
       </div>
@@ -230,11 +214,11 @@ export default function CardDetailView({ initialCards }: { initialCards: any[] }
               <ZoomableImage key={card.id} src={card.image_url} alt={card.name} />
             ) : (
               <div className="w-full aspect-[63/88] rounded-[24px] bg-muted flex items-center justify-center border border-border">
-                <span className="text-foreground/40 font-medium">No Image</span>
+                <span className="text-foreground/40 ">No Image</span>
               </div>
             )}
             {currentCollection.quantity > 0 && (
-              <div className="absolute -top-3 -right-3 bg-foreground text-background font-black text-lg w-10 h-10 rounded-full flex items-center justify-center border-4 border-background shadow-lg z-10">
+              <div className="absolute -top-3 -right-3 bg-foreground text-background  text-lg w-10 h-10 rounded-full flex items-center justify-center border-4 border-background shadow-lg z-10">
                 {currentCollection.quantity}
               </div>
             )}
@@ -245,7 +229,7 @@ export default function CardDetailView({ initialCards }: { initialCards: any[] }
                 <Minus size={18} />
               </button>
               <div className="flex flex-col items-center justify-center w-20">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-foreground/50 mb-0.5">Koleksi</span>
+                <span className="text-[10px]  uppercase tracking-widest text-foreground/50 mb-0.5">Koleksi</span>
                 <input 
                   type="number" 
                   value={inputValue} 
@@ -253,7 +237,7 @@ export default function CardDetailView({ initialCards }: { initialCards: any[] }
                   onBlur={handleInputBlur}
                   onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
                   disabled={isQuantityLoading}
-                  className="w-full text-center font-black text-xl leading-none bg-transparent border-none outline-none focus:ring-2 focus:ring-foreground/20 rounded-md [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none transition-all"
+                  className="w-full text-center  text-xl leading-none bg-transparent border-none outline-none focus:ring-2 focus:ring-foreground/20 rounded-md [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none transition-all"
                 />
               </div>
               <button onClick={() => handleQuantityChange(1)} disabled={isQuantityLoading} className="w-10 h-10 flex items-center justify-center rounded-lg bg-foreground text-background hover:scale-105 transition-all disabled:opacity-50">
@@ -267,16 +251,16 @@ export default function CardDetailView({ initialCards }: { initialCards: any[] }
         </div>
         <div className="lg:col-span-7 flex flex-col gap-6 w-full">
           <div className="flex flex-col gap-1">
-            <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight">{card.name}</h1>
+            <h1 className="text-3xl md:text-4xl  tracking-tight">{card.name}</h1>
             <div className="flex flex-wrap items-center gap-2 mt-1">
-              <span className="text-xs font-bold text-foreground/50 uppercase tracking-widest">{cardStage}</span>
+              <span className="text-xs  text-foreground/50 uppercase tracking-widest">{cardStage}</span>
               {card.evolution && card.evolution.length > 0 && (
-                <><span className="text-foreground/30 px-1">•</span><span className="text-xs font-semibold text-foreground/60">Evolusi: {card.evolution.join(" → ")}</span></>
+                <><span className="text-foreground/30 px-1">•</span><span className="text-xs  text-foreground/60">Evolusi: {card.evolution.join(" → ")}</span></>
               )}
             </div>
             {initialCards.length > 1 && (
               <div className="mt-5 flex flex-col gap-2.5">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-foreground/40">Varian Kartu</span>
+                <span className="text-[10px]  uppercase tracking-widest text-foreground/40">Varian Kartu</span>
                 <div className="flex flex-wrap gap-2">
                   {initialCards.map((variantCard, idx) => {
                     const label = variantCard.variant_name ? variantCard.variant_name : `Varian ${idx + 1}`;
@@ -297,7 +281,7 @@ export default function CardDetailView({ initialCards }: { initialCards: any[] }
                           const qs = params.toString() ? `?${params.toString()}` : '';
                           window.history.pushState(null, '', window.location.pathname + qs);
                         }}
-                        className={`px-4 py-2 text-xs font-bold rounded-xl transition-all border flex items-center gap-2 ${
+                        className={`px-4 py-2 text-xs  rounded-xl transition-all border flex items-center gap-2 ${
                           activeIndex === idx ? 'bg-foreground text-background border-foreground shadow-md' : 'bg-background text-foreground/70 border-border/60 hover:border-foreground/40 hover:bg-muted/30'
                         }`}
                       >
@@ -312,15 +296,15 @@ export default function CardDetailView({ initialCards }: { initialCards: any[] }
             <div className="flex flex-wrap items-center gap-5 mt-5">
               {Number(card.hp) > 0 && (
                 <div className="flex items-center gap-1.5">
-                  <span className="text-foreground/40 font-bold text-sm tracking-widest uppercase">HP</span>
-                  <span className="text-3xl font-bold leading-none">{card.hp}</span>
+                  <span className="text-foreground/40  text-sm tracking-widest uppercase">HP</span>
+                  <span className="text-3xl  leading-none">{card.hp}</span>
                 </div>
               )}
               {card.types && card.types.length > 0 && (
                 <>
                   {Number(card.hp) > 0 && <span className="text-border text-2xl font-light hidden sm:block">/</span>}
                   <div className="flex items-center gap-2">
-                    <span className="text-foreground/40 font-bold text-sm tracking-widest uppercase">TIPE</span>
+                    <span className="text-foreground/40  text-sm tracking-widest uppercase">TIPE</span>
                     <div className="flex items-center gap-1">
                       {card.types.map((imgUrl: string, index: number) => (
                         <img key={index} src={imgUrl} alt="Type" className="object-contain drop-shadow-sm w-6 h-6" />
@@ -331,7 +315,7 @@ export default function CardDetailView({ initialCards }: { initialCards: any[] }
               )}
             </div>
             {(card.pokedex_number || card.species || card.height || card.weight) && (
-              <div className="mt-4 flex flex-wrap items-center gap-2.5 text-xs font-medium text-foreground/50">
+              <div className="mt-4 flex flex-wrap items-center gap-2.5 text-xs  text-foreground/50">
                 {card.pokedex_number && <span>Pokédex No. {card.pokedex_number.replace(/No\.?/ig, '').trim()}</span>}
                 {card.pokedex_number && card.species && <span className="text-border">•</span>}
                 {card.species && <span>{card.species}</span>}
@@ -365,9 +349,9 @@ export default function CardDetailView({ initialCards }: { initialCards: any[] }
                               ))}
                             </div>
                           )}
-                          {validName && <span className="font-bold text-lg">{attack.name}</span>}
+                          {validName && <span className=" text-lg">{attack.name}</span>}
                         </div>
-                        {validDamage && <span className="font-black text-xl whitespace-nowrap">{attack.damage}</span>}
+                        {validDamage && <span className=" text-xl whitespace-nowrap">{attack.damage}</span>}
                       </div>
                     )}
                     {validEffect && <p className="text-sm text-foreground/70 leading-relaxed">{attack.effect}</p>}
@@ -379,26 +363,26 @@ export default function CardDetailView({ initialCards }: { initialCards: any[] }
           {Number(card.hp) > 0 && (
             <div className="grid grid-cols-3 gap-px bg-border/60 border border-border/60 rounded-[20px] overflow-hidden">
               <div className="flex flex-col items-center justify-center p-4 gap-1.5 bg-background">
-                <span className="text-foreground/40 text-[10px] font-bold uppercase tracking-widest">Kelemahan</span>
-                <div className="flex items-center gap-1.5 font-bold text-sm">
+                <span className="text-foreground/40 text-[10px]  uppercase tracking-widest">Kelemahan</span>
+                <div className="flex items-center gap-1.5  text-sm">
                   {card.weakness?.type ? (
                     <><img src={card.weakness.type} alt="Weakness" className="w-[18px] h-[18px]" /><span>{card.weakness.value}</span></>
                   ) : (<span className="text-foreground/30">--</span>)}
                 </div>
               </div>
               <div className="flex flex-col items-center justify-center p-4 gap-1.5 bg-background">
-                <span className="text-foreground/40 text-[10px] font-bold uppercase tracking-widest">Resistansi</span>
-                <div className="flex items-center gap-1.5 font-bold text-sm">
+                <span className="text-foreground/40 text-[10px]  uppercase tracking-widest">Resistansi</span>
+                <div className="flex items-center gap-1.5  text-sm">
                   {card.resistance?.type ? (
                     <><img src={card.resistance.type} alt="Resistance" className="w-[18px] h-[18px]" /><span>{card.resistance.value}</span></>
                   ) : (<span className="text-foreground/30">--</span>)}
                 </div>
               </div>
               <div className="flex flex-col items-center justify-center p-4 gap-1.5 bg-background">
-                <span className="text-foreground/40 text-[10px] font-bold uppercase tracking-widest">Mundur</span>
+                <span className="text-foreground/40 text-[10px]  uppercase tracking-widest">Mundur</span>
                 <div className="flex items-center gap-1">
-                  {card.retreat_cost > 0 ? (
-                    Array.from({ length: card.retreat_cost }).map((_, i) => (
+                  {(card.retreat_cost ?? 0) > 0 ? (
+                    Array.from({ length: card.retreat_cost as number }).map((_, i) => (
                       <img key={i} src="https://asia.pokemon-card.com/various_images/energy/Colorless.png" alt="Retreat" className="w-[18px] h-[18px]" />
                     ))
                   ) : (<span className="text-foreground/30">--</span>)}
@@ -408,26 +392,26 @@ export default function CardDetailView({ initialCards }: { initialCards: any[] }
           )}
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-px bg-border/60 border border-border/60 rounded-[20px] text-center overflow-hidden">
             <div className="flex flex-col p-3 md:p-4 gap-1 justify-center items-center bg-background col-span-2 sm:col-span-1">
-              <span className="text-foreground/40 text-[9px] font-bold uppercase tracking-widest">Ilustrator</span>
-              <span className="font-bold text-[11px] text-center break-words">{card.illustrator || "--"}</span>
+              <span className="text-foreground/40 text-[9px]  uppercase tracking-widest">Ilustrator</span>
+              <span className=" text-[11px] text-center break-words">{card.illustrator || "--"}</span>
             </div>
             <div className="flex flex-col p-3 md:p-4 gap-1 justify-center items-center bg-background">
-              <span className="text-foreground/40 text-[9px] font-bold uppercase tracking-widest">Ekspansi</span>
+              <span className="text-foreground/40 text-[9px]  uppercase tracking-widest">Ekspansi</span>
               {card.expansion_symbol_url ? (
                 <img src={card.expansion_symbol_url} alt="Symbol" className="h-4 w-auto object-contain drop-shadow-sm" />
-              ) : (<span className="text-foreground/30 text-[11px] font-bold">--</span>)}
+              ) : (<span className="text-foreground/30 text-[11px] ">--</span>)}
             </div>
             <div className="flex flex-col p-3 md:p-4 gap-1 justify-center items-center bg-background">
-              <span className="text-foreground/40 text-[9px] font-bold uppercase tracking-widest">Regulasi</span>
-              <span className="font-bold text-[11px]">{card.regulation_mark || "--"}</span>
+              <span className="text-foreground/40 text-[9px]  uppercase tracking-widest">Regulasi</span>
+              <span className=" text-[11px]">{card.regulation_mark || "--"}</span>
             </div>
             <div className="flex flex-col p-3 md:p-4 gap-1 justify-center items-center bg-background">
-              <span className="text-foreground/40 text-[9px] font-bold uppercase tracking-widest">No. Kartu</span>
-              <span className="font-bold text-[11px]">{card.card_number || "--"}</span>
+              <span className="text-foreground/40 text-[9px]  uppercase tracking-widest">No. Kartu</span>
+              <span className=" text-[11px]">{card.card_number || "--"}</span>
             </div>
             <div className="flex flex-col p-3 md:p-4 gap-1 justify-center items-center bg-background">
-              <span className="text-foreground/40 text-[9px] font-bold uppercase tracking-widest">Rarity</span>
-              <span className="font-bold text-[11px]">{card.rarity || "--"}</span>
+              <span className="text-foreground/40 text-[9px]  uppercase tracking-widest">Rarity</span>
+              <span className=" text-[11px]">{card.rarity || "--"}</span>
             </div>
           </div>
         </div>

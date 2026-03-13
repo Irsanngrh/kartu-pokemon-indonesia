@@ -4,8 +4,10 @@ import Link from "next/link";
 import { useState } from "react";
 import { Image as ImageIcon, AlertCircle } from "lucide-react";
 
+import { PokemonCard as PokemonCardType } from "@/types";
+
 interface PokemonCardProps {
-  card: any;
+  card: PokemonCardType;
   source?: "library" | "collection" | "wishlist";
 }
 
@@ -52,7 +54,7 @@ export default function PokemonCard({ card, source = "library" }: PokemonCardPro
           {imageState === "error" && (
              <div className="absolute inset-0 flex flex-col gap-2 items-center justify-center text-red-500/50">
                <AlertCircle size={28} />
-               <span className="text-[9px] font-bold uppercase tracking-widest text-center">Gagal<br/>Memuat</span>
+               <span className="text-[9px]  uppercase tracking-widest text-center">Gagal<br/>Memuat</span>
              </div>
           )}
           {card.image_url ? (
@@ -66,25 +68,25 @@ export default function PokemonCard({ card, source = "library" }: PokemonCardPro
               loading="lazy"
             />
           ) : (
-            <span className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest">No Image</span>
+            <span className="text-[10px]  text-foreground/40 uppercase tracking-widest">No Image</span>
           )}
         </div>
         <div className="flex flex-col gap-1 px-1 pb-1">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[10px] font-bold text-foreground/50 uppercase tracking-widest truncate">
+            <span className="text-[10px]  text-foreground/50 uppercase tracking-widest truncate">
             {card.card_number || "---"}
             </span>
             {card.rarity && (
-              <span className="text-[10px] font-bold text-foreground/60 bg-background/80 px-1.5 py-0.5 rounded-md border border-border/50 shadow-sm">
+              <span className="text-[10px]  text-foreground/60 bg-background/80 px-1.5 py-0.5 rounded-md border border-border/50 shadow-sm">
                 {card.rarity}
               </span>
             )}
           </div>
-          <h3 className="text-sm font-bold leading-tight truncate group-hover:text-blue-500 transition-colors">
+          <h3 className="text-sm  leading-tight truncate group-hover:text-blue-500 transition-colors">
             {card.name}
           </h3>
           <div className="flex items-center gap-1.5">
-            <span className="text-xs font-medium text-foreground/60 truncate">
+            <span className="text-xs  text-foreground/60 truncate">
               {card.sets?.name || "Unknown Set"}
             </span>
           </div>

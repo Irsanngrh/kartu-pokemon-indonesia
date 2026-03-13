@@ -4,20 +4,8 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import PokemonCard from "@/components/ui/PokemonCard";
 import CustomDropdown from "@/components/ui/CustomDropdown";
 import { Search, ArrowUp, Loader2, Info } from "lucide-react";
-
-let globalSession = {
-  searchQuery: "",
-  expansionFilter: "Semua",
-  cardTypeFilter: "Semua",
-  elementFilter: "Semua",
-  stageFilter: "Semua",
-  illustratorFilter: "Semua",
-  regulationFilter: "Semua",
-  rarityFilter: "Semua",
-  visibleCount: 30,
-};
-
-let globalScrollY = 0;
+import { PokemonCard as PokemonCardType } from "@/types";
+import { fetchCardsBasedOnFilters, fetchFilterOptions } from "@/app/actions/cards.fetch";
 
 function getCardType(card: any) {
   if (card.hp) return "Pokémon";
@@ -75,16 +63,31 @@ function getStageInfo(card: any) {
   return { categories: [base] };
 }
 
-export default function LibraryView({ initialCards }: { initialCards: any[] }) {
-  const [searchQuery, setSearchQuery] = useState(globalSession.searchQuery);
-  const [expansionFilter, setExpansionFilter] = useState(globalSession.expansionFilter);
-  const [cardTypeFilter, setCardTypeFilter] = useState(globalSession.cardTypeFilter);
-  const [elementFilter, setElementFilter] = useState(globalSession.elementFilter);
-  const [stageFilter, setStageFilter] = useState(globalSession.stageFilter);
-  const [illustratorFilter, setIllustratorFilter] = useState(globalSession.illustratorFilter);
-  const [regulationFilter, setRegulationFilter] = useState(globalSession.regulationFilter);
-  const [rarityFilter, setRarityFilter] = useState(globalSession.rarityFilter);
-  const [visibleCount, setVisibleCount] = useState(globalSession.visibleCount);
+export default function LibraryView({ 
+  initialCards, 
+  initialTotalCount, 
+  initialFilterOptions 
+}: { 
+  initialCards: PokemonCardType[], 
+  initialTotalCount: number, 
+  initialFilterOptions: any 
+}) {
+  const [fetchedCards, setFetchedCards] = useState<PokemonCardType[]>(initialCards);
+  const [totalCount, setTotalCount] = useState(initialTotalCount);
+  const [hasMoreServer, setHasMoreServer] = useState(initialCards.length < initialTotalCount);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [isLoadingCards, setIsLoadingCards] = useState(false);
+  const [filterOptions, setFilterOptions] = useState(initialFilterOptions);
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [expansionFilter, setExpansionFilter] = useState("Semua");
+  const [cardTypeFilter, setCardTypeFilter] = useState("Semua");
+  const [elementFilter, setElementFilter] = useState("Semua");
+  const [stageFilter, setStageFilter] = useState("Semua");
+  const [illustratorFilter, setIllustratorFilter] = useState("Semua");
+  const [regulationFilter, setRegulationFilter] = useState("Semua");
+  const [rarityFilter, setRarityFilter] = useState("Semua");
+  const [visibleCount, setVisibleCount] = useState(30);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const filterRef = useRef<HTMLDivElement>(null);
@@ -92,7 +95,8 @@ export default function LibraryView({ initialCards }: { initialCards: any[] }) {
   const [showScrollTop, setShowScrollTop] = useState(false);
   
   const [isInitialized, setIsInitialized] = useState(false);
-  const isRestoring = useRef(globalScrollY > 0);
+  const scrollYRef = useRef(0);
+  const isRestoring = useRef(false);
   const isFirstRender = useRef(true);
 
   const showToast = (message: string) => {
@@ -108,13 +112,9 @@ export default function LibraryView({ initialCards }: { initialCards: any[] }) {
       const isReload = navEntries.length > 0 && (navEntries[0] as PerformanceNavigationTiming).type === "reload";
 
       if (isReload) {
-        globalSession = {
-          searchQuery: "", expansionFilter: "Semua", cardTypeFilter: "Semua",
-          elementFilter: "Semua", stageFilter: "Semua", illustratorFilter: "Semua",
-          regulationFilter: "Semua", rarityFilter: "Semua", visibleCount: 30
-        };
-        globalScrollY = 0;
+        scrollYRef.current = 0;
         sessionStorage.removeItem('libraryFilters');
+        sessionStorage.removeItem('libraryScrollY');
       } else {
         const savedState = sessionStorage.getItem('libraryFilters');
         if (savedState) {
@@ -131,6 +131,11 @@ export default function LibraryView({ initialCards }: { initialCards: any[] }) {
             setVisibleCount(parsed.visibleCount || 30);
           } catch (e) {}
         }
+        const savedScroll = sessionStorage.getItem('libraryScrollY');
+        if (savedScroll) {
+          scrollYRef.current = parseInt(savedScroll, 10) || 0;
+          if (scrollYRef.current > 0) isRestoring.current = true;
+        }
       }
       setIsInitialized(true);
     }
@@ -139,23 +144,66 @@ export default function LibraryView({ initialCards }: { initialCards: any[] }) {
   useEffect(() => {
     if (!isInitialized) return; 
 
-    globalSession = {
+    const currentSession = {
       searchQuery, expansionFilter, cardTypeFilter, elementFilter, 
-      stageFilter, illustratorFilter, regulationFilter, rarityFilter, visibleCount
+      stageFilter, illustratorFilter, regulationFilter, rarityFilter
     };
     
-    sessionStorage.setItem('libraryFilters', JSON.stringify(globalSession));
-  }, [searchQuery, expansionFilter, cardTypeFilter, elementFilter, stageFilter, illustratorFilter, regulationFilter, rarityFilter, visibleCount, isInitialized]);
+    sessionStorage.setItem('libraryFilters', JSON.stringify(currentSession));
+  }, [searchQuery, expansionFilter, cardTypeFilter, elementFilter, stageFilter, illustratorFilter, regulationFilter, rarityFilter, isInitialized]);
+
+  const [debouncedQuery, setDebouncedQuery] = useState(searchQuery);
 
   useEffect(() => {
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
-      return;
-    }
-    if (!isRestoring.current) {
-      setVisibleCount(30);
-    }
-  }, [searchQuery, expansionFilter, cardTypeFilter, elementFilter, stageFilter, illustratorFilter, regulationFilter, rarityFilter]);
+    const t = setTimeout(() => setDebouncedQuery(searchQuery), 300);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    if (!isInitialized) return;
+    
+    let isMounted = true;
+    const fetchFirstPage = async () => {
+       setIsLoadingCards(true);
+       const filters = { 
+         searchQuery: debouncedQuery, 
+         expansionFilter, 
+         cardTypeFilter, 
+         elementFilter, 
+         stageFilter, 
+         illustratorFilter, 
+         regulationFilter, 
+         rarityFilter 
+       };
+       const { cards, hasMore, totalCount } = await fetchCardsBasedOnFilters(filters, 0, 30);
+       
+       if (isMounted) {
+         setFetchedCards(cards);
+         setHasMoreServer(hasMore);
+         setTotalCount(totalCount);
+         setCurrentPage(0);
+         setIsLoadingCards(false);
+       }
+    };
+    fetchFirstPage();
+    return () => { isMounted = false; };
+  }, [debouncedQuery, expansionFilter, cardTypeFilter, elementFilter, stageFilter, illustratorFilter, regulationFilter, rarityFilter, isInitialized]);
+
+  useEffect(() => {
+    if (!isInitialized) return;
+    let isMounted = true;
+    const fetchOptions = async () => {
+       const opts = await fetchFilterOptions(expansionFilter);
+       if (isMounted) {
+         setFilterOptions(opts);
+         if (illustratorFilter !== "Semua" && !opts.illustrators.includes(illustratorFilter)) setIllustratorFilter("Semua");
+         if (regulationFilter !== "Semua" && !opts.regulations.includes(regulationFilter)) setRegulationFilter("Semua");
+         if (rarityFilter !== "Semua" && !opts.rarities.includes(rarityFilter)) setRarityFilter("Semua");
+       }
+    };
+    fetchOptions();
+    return () => { isMounted = false; };
+  }, [expansionFilter, isInitialized]);
 
   useEffect(() => {
     if (!isInitialized) return;
@@ -163,7 +211,10 @@ export default function LibraryView({ initialCards }: { initialCards: any[] }) {
     let timeoutId: NodeJS.Timeout;
     
     const handleScroll = () => {
-      if (!isRestoring.current) globalScrollY = window.scrollY;
+      if (!isRestoring.current) {
+        scrollYRef.current = window.scrollY;
+        sessionStorage.setItem('libraryScrollY', window.scrollY.toString());
+      }
       setShowScrollTop(window.scrollY > 400);
     };
 
@@ -178,52 +229,14 @@ export default function LibraryView({ initialCards }: { initialCards: any[] }) {
     return () => window.removeEventListener('scroll', throttledScroll);
   }, [isInitialized]);
 
-  const expansions = useMemo(() => {
-    const setMap = new Map();
-    initialCards.forEach(c => {
-      if (c.sets) {
-        const key = `${c.sets.name} (${c.sets.code})`;
-        if (!setMap.has(key)) {
-          setMap.set(key, c.sets.set_order || 99);
-        }
-      }
-    });
-    
-    const sortedSets = Array.from(setMap.entries())
-      .sort((a, b) => a[1] - b[1])
-      .map(e => e[0]);
-      
-    return ["Semua", ...sortedSets];
-  }, [initialCards]);
-
+  const expansions = filterOptions.expansions || ["Semua"];
   const cardTypes = ["Semua", "Pokémon", "Item", "Supporter", "Stadium", "Pokémon Tool", "Energy"];
   const elements = ["Semua", "Normal", "Api", "Air", "Listrik", "Rumput", "Petarung", "Psikis", "Naga", "Kegelapan", "Baja", "Peri"];
   const stages = ["Semua", "Basic", "Stage 1", "Stage 2", "EX", "GX", "V", "VMAX", "VSTAR"];
   
-  const cardsForDynamicFilters = useMemo(() => {
-    if (expansionFilter === "Semua") return initialCards;
-    return initialCards.filter(card => {
-      const cardExp = card.sets ? `${card.sets.name} (${card.sets.code})` : "";
-      return cardExp === expansionFilter;
-    });
-  }, [initialCards, expansionFilter]);
-
-  const illustrators = useMemo(() => ["Semua", ...Array.from(new Set(cardsForDynamicFilters.map(c => c.illustrator).filter(Boolean))).sort((a, b) => a.localeCompare(b))], [cardsForDynamicFilters]);
-  const regulations = useMemo(() => ["Semua", ...Array.from(new Set(cardsForDynamicFilters.map(c => c.regulation_mark).filter(Boolean))).sort((a, b) => a.localeCompare(b))], [cardsForDynamicFilters]);
-  
-  const rarities = useMemo(() => {
-    const rarityOrder = ["Tanpa Tanda", "C", "U", "R", "RR", "ACE", "RRR", "AR", "PR", "TR", "SR", "MA", "HR", "UR", "K", "A", "SAR", "S", "SSR", "BWR", "MUR"];
-    const existingRarities = new Set(cardsForDynamicFilters.map(c => c.rarity).filter(Boolean));
-    const sortedRarities = rarityOrder.filter(r => existingRarities.has(r));
-    const unknownRarities = Array.from(existingRarities).filter(r => !rarityOrder.includes(r as string)).sort((a, b) => a.localeCompare(b));
-    return ["Semua", ...sortedRarities, ...unknownRarities];
-  }, [cardsForDynamicFilters]);
-
-  useEffect(() => {
-    if (illustratorFilter !== "Semua" && !illustrators.includes(illustratorFilter)) setIllustratorFilter("Semua");
-    if (regulationFilter !== "Semua" && !regulations.includes(regulationFilter)) setRegulationFilter("Semua");
-    if (rarityFilter !== "Semua" && !rarities.includes(rarityFilter)) setRarityFilter("Semua");
-  }, [illustrators, regulations, rarities, illustratorFilter, regulationFilter, rarityFilter]);
+  const illustrators = filterOptions.illustrators || ["Semua"];
+  const regulations = filterOptions.regulations || ["Semua"];
+  const rarities = filterOptions.rarities || ["Semua"];
 
   const handleCardTypeChange = (val: string) => {
     setCardTypeFilter(val);
@@ -233,58 +246,38 @@ export default function LibraryView({ initialCards }: { initialCards: any[] }) {
     }
   };
 
-  const filteredCards = useMemo(() => {
-    const filtered = initialCards.filter(card => {
-      if (searchQuery && !card.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-      
-      if (expansionFilter !== "Semua") {
-        const cardExp = card.sets ? `${card.sets.name} (${card.sets.code})` : "";
-        if (cardExp !== expansionFilter) return false;
-      }
-      
-      const cType = getCardType(card);
-      if (cardTypeFilter !== "Semua" && cType !== cardTypeFilter) return false;
+  const displayedCards = fetchedCards;
+  const hasMoreCards = hasMoreServer;
 
-      if (cardTypeFilter === "Pokémon") {
-        if (elementFilter !== "Semua" && !getElements(card).includes(elementFilter)) return false;
-        if (stageFilter !== "Semua" && !getStageInfo(card).categories.includes(stageFilter)) return false;
-      }
-
-      if (illustratorFilter !== "Semua" && card.illustrator !== illustratorFilter) return false;
-      if (regulationFilter !== "Semua" && card.regulation_mark !== regulationFilter) return false;
-      if (rarityFilter !== "Semua" && card.rarity !== rarityFilter) return false;
-
-      return true;
-    });
-
-    return filtered.sort((a, b) => {
-      const orderSetA = a.sets?.set_order || 99;
-      const orderSetB = b.sets?.set_order || 99;
-      if (orderSetA !== orderSetB) return orderSetA - orderSetB;
-      
-      const numA = parseInt((a.card_number || "0").replace(/\D/g, "")) || 0;
-      const numB = parseInt((b.card_number || "0").replace(/\D/g, "")) || 0;
-      if (numA !== numB) return numA - numB;
-      
-      const orderA = a.variant_order || 1;
-      const orderB = b.variant_order || 1;
-      if (orderA !== orderB) return orderA - orderB;
-      
-      return (a.image_url || "").localeCompare(b.image_url || "");
-    });
-  }, [initialCards, searchQuery, expansionFilter, cardTypeFilter, elementFilter, stageFilter, illustratorFilter, regulationFilter, rarityFilter]);
-
-  const displayedCards = filteredCards.slice(0, visibleCount);
-  const hasMoreCards = visibleCount < filteredCards.length;
+  const loadMoreCards = async () => {
+    if (isLoadingCards || !hasMoreServer) return;
+    setIsLoadingCards(true);
+    const filters = { 
+         searchQuery: debouncedQuery, 
+         expansionFilter, 
+         cardTypeFilter, 
+         elementFilter, 
+         stageFilter, 
+         illustratorFilter, 
+         regulationFilter, 
+         rarityFilter 
+    };
+    const nextPage = currentPage + 1;
+    const { cards, hasMore } = await fetchCardsBasedOnFilters(filters, nextPage, 30);
+    setFetchedCards(prev => [...prev, ...cards]);
+    setCurrentPage(nextPage);
+    setHasMoreServer(hasMore);
+    setIsLoadingCards(false);
+  };
 
   useEffect(() => {
     const currentObserver = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && hasMoreCards) {
-          setVisibleCount((prev) => prev + 30);
+        if (entries[0].isIntersecting && !isLoadingCards && hasMoreServer) {
+          loadMoreCards();
         }
       },
-      { rootMargin: "200px" }
+      { rootMargin: "300px" }
     );
 
     if (loaderRef.current) {
@@ -296,12 +289,12 @@ export default function LibraryView({ initialCards }: { initialCards: any[] }) {
         currentObserver.unobserve(loaderRef.current); 
       }
     };
-  }, [hasMoreCards]);
+  }, [hasMoreServer, isLoadingCards, currentPage]);
 
   useEffect(() => {
-    if (isInitialized && isRestoring.current && globalScrollY > 0) {
+    if (isInitialized && isRestoring.current && scrollYRef.current > 0) {
       let attempts = 0;
-      const targetY = globalScrollY;
+      const targetY = scrollYRef.current;
       const restoreInterval = setInterval(() => {
         attempts++;
         if (document.documentElement.scrollHeight >= targetY + window.innerHeight / 2) {
@@ -331,19 +324,19 @@ export default function LibraryView({ initialCards }: { initialCards: any[] }) {
   return (
     <div className="flex flex-col gap-8 pb-10 pt-6 relative w-full">
       {toastMessage && (
-        <div className="fixed top-20 sm:top-24 left-1/2 -translate-x-1/2 z-[100] w-[90%] sm:w-fit max-w-[360px] sm:max-w-none bg-foreground text-background px-4 sm:px-6 py-3 sm:py-3.5 rounded-2xl sm:rounded-full shadow-2xl font-bold text-[13px] sm:text-sm flex items-center justify-center sm:justify-start gap-3 transition-all animate-in fade-in slide-in-from-top-4 text-center sm:text-left leading-relaxed sm:whitespace-nowrap">
+        <div className="fixed top-20 sm:top-24 left-1/2 -translate-x-1/2 z-[100] w-[90%] sm:w-fit max-w-[360px] sm:max-w-none bg-foreground text-background px-4 sm:px-6 py-3 sm:py-3.5 rounded-2xl sm:rounded-full shadow-2xl  text-[13px] sm:text-sm flex items-center justify-center sm:justify-start gap-3 transition-all animate-in fade-in slide-in-from-top-4 text-center sm:text-left leading-relaxed sm:whitespace-nowrap">
           <Info size={18} className="text-background shrink-0" />
           <span>{toastMessage}</span>
         </div>
       )}
       <header className="flex flex-col gap-1">
-        <h1 className="text-3xl font-extrabold tracking-tight">Koleksi Kartu</h1>
-        <p className="text-foreground/50 text-sm font-medium">Jelajahi dan saring database kartu Pokémon Indonesia.</p>
+        <h1 className="text-3xl  tracking-tight">Koleksi Kartu</h1>
+        <p className="text-foreground/50 text-sm ">Jelajahi dan saring database kartu Pokémon Indonesia.</p>
       </header>
       <div ref={filterRef} className="relative z-40 flex flex-col gap-5 p-5 md:p-6 bg-muted/30 border border-border/50 rounded-[20px]">
         <div className="flex flex-col lg:flex-row gap-4 w-full items-end">
           <div className="relative w-full lg:flex-[2] flex flex-col gap-1.5">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-foreground/50 ml-1">Pencarian</span>
+            <span className="text-[10px]  uppercase tracking-widest text-foreground/50 ml-1">Pencarian</span>
             <div className="relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-foreground/40" size={18} />
               <input 
@@ -351,7 +344,7 @@ export default function LibraryView({ initialCards }: { initialCards: any[] }) {
                 placeholder="Cari nama kartu Pokémon..." 
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-11 pr-4 h-[40px] bg-background border border-border/50 rounded-xl focus:outline-none focus:border-foreground/30 focus:ring-1 focus:ring-foreground/30 text-sm font-semibold transition-all shadow-sm"
+                className="w-full pl-11 pr-4 h-[40px] bg-background border border-border/50 rounded-xl focus:outline-none focus:border-foreground/30 focus:ring-1 focus:ring-foreground/30 text-sm  transition-all shadow-sm"
               />
             </div>
           </div>
@@ -406,24 +399,27 @@ export default function LibraryView({ initialCards }: { initialCards: any[] }) {
           </div>
         </div>
       </div>
-      <div className="flex items-center justify-between text-[11px] font-bold text-foreground/40 tracking-widest uppercase border-b border-border/40 pb-2">
-        <span>Menampilkan {filteredCards.length} Kartu</span>
+      <div className="flex items-center justify-between text-[11px]  text-foreground/40 tracking-widest uppercase border-b border-border/40 pb-2">
+        <span>Menampilkan {totalCount} Kartu</span>
       </div>
       <div className="relative z-10 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-5">
         {displayedCards.map((card) => (
           <PokemonCard key={card.id} card={card} source="library" />
         ))}
-        {filteredCards.length === 0 && (
+        {displayedCards.length === 0 && !isLoadingCards && (
           <div className="col-span-full py-20 flex flex-col items-center justify-center gap-3">
             <span className="text-4xl grayscale opacity-50">🔍</span>
-            <p className="text-foreground/50 text-sm font-bold uppercase tracking-widest">Tidak ada kartu yang cocok</p>
+            <p className="text-foreground/50 text-sm  uppercase tracking-widest">Tidak ada kartu yang cocok</p>
           </div>
         )}
       </div>
-      {hasMoreCards && (
+      {isLoadingCards && (
         <div ref={loaderRef} className="w-full py-10 flex justify-center items-center">
           <Loader2 className="animate-spin text-foreground/30" size={36} />
         </div>
+      )}
+      {!isLoadingCards && hasMoreCards && (
+        <div ref={loaderRef} className="w-full py-2"></div>
       )}
       {showScrollTop && (
         <button

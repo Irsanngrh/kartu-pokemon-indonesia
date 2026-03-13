@@ -28,14 +28,14 @@ export default function CustomDropdown({ label, options, value, onChange, disabl
 
   return (
     <div className="relative flex flex-col gap-1.5 w-full" ref={dropdownRef}>
-      <span className="text-[10px] font-bold uppercase tracking-widest text-foreground/50 ml-1">
+      <span className="text-[10px]  uppercase tracking-widest text-foreground/50 ml-1">
         {label}
       </span>
       
       <button
         type="button"
         onClick={() => !disabled && setIsOpen(!isOpen)}
-        className={`flex items-start justify-between w-full px-4 py-2.5 bg-background border rounded-xl text-sm font-semibold transition-all shadow-sm ${
+        className={`flex items-start justify-between w-full px-4 py-2.5 bg-background border rounded-xl text-sm  transition-all shadow-sm ${
           disabled 
             ? "border-border/30 bg-muted/20 text-foreground/30 cursor-not-allowed" 
             : isOpen 
@@ -58,9 +58,9 @@ export default function CustomDropdown({ label, options, value, onChange, disabl
                   onChange(option);
                   setIsOpen(false);
                 }}
-                className={`flex items-center justify-between w-full px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                className={`flex items-center justify-between w-full px-3 py-2 text-sm  rounded-lg transition-colors ${
                   value === option 
-                    ? "bg-foreground text-background font-bold" 
+                    ? "bg-foreground text-background " 
                     : "hover:bg-muted text-foreground/80"
                 }`}
               >

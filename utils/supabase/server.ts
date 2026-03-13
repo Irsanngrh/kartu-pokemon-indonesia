@@ -17,8 +17,9 @@ export async function createClient() {
             cookiesToSet.forEach(({ name, value, options }) => {
               cookieStore.set(name, value, options);
             });
-          } catch (error) {
-            
+          } catch {
+            // Intentionally silent: cookie-setting fails in Server Components (read-only context).
+            // This is expected behaviour per Supabase SSR documentation.
           }
         },
       },

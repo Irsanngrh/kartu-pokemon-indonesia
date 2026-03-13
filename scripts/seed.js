@@ -27,7 +27,27 @@ const FILES_TO_SEED = [
     { filePath: "scraped_cards_SV5S.json", setCode: "SV5S", setName: "Harta Berkilau ex" },
     { filePath: "scraped_cards_SV4S.json", setCode: "SV4S", setName: "Pertemuan Paradoks" },
     { filePath: "scraped_cards_SV3S.json", setCode: "SV3S", setName: "Kilau Hitam" },
-    { filePath: "scraped_cards_SV2A.json", setCode: "SV2A", setName: "Kartu Pokémon 151" }
+    { filePath: "scraped_cards_SV2A.json", setCode: "SV2A", setName: "Kartu Pokémon 151" },
+    { filePath: "scraped_cards_SV2P.json", setCode: "SV2P", setName: "Mara Bahaya Salju" },
+    { filePath: "scraped_cards_SV2D.json", setCode: "SV2D", setName: "Letusan Tanah" },
+    { filePath: "scraped_cards_SV1S.json", setCode: "SV1S", setName: "Hantaman Triplet" },
+    { filePath: "scraped_cards_SV1V.json", setCode: "SV1V", setName: "Violet ex" },
+    { filePath: "scraped_cards_SV1S.json", setCode: "SV1S", setName: "Scarlet ex" },
+    { filePath: "scraped_cards_S12A.json", setCode: "S12A", setName: "VSTAR Semesta" },
+    { filePath: "scraped_cards_S12.json", setCode: "S12", setName: "Pemicu Paradigma" },
+    { filePath: "scraped_cards_S11A.json", setCode: "S11A", setName: "Arkana Memuncak" },
+    { filePath: "scraped_cards_S11.json", setCode: "S11", setName: "Neraka Sirna" },
+    { filePath: "scraped_cards_S10A.json", setCode: "S10A", setName: "Fantom Kegelapan" },
+    { filePath: "scraped_cards_S10P.json", setCode: "S10P", setName: "Penyulap Ruang" },
+    { filePath: "scraped_cards_S10D.json", setCode: "S10D", setName: "Pengamat Waktu" },
+    { filePath: "scraped_cards_S10B.json", setCode: "S10B", setName: "Pokémon GO" },
+    { filePath: "scraped_cards_S9A.json", setCode: "S9A", setName: "Pertarungan Daerah" },
+    { filePath: "scraped_cards_S9.json", setCode: "S9", setName: "Star Birth" },
+    { filePath: "scraped_cards_S8B.json", setCode: "S8B", setName: "VMAX Klimaks" },
+    { filePath: "scraped_cards_S8.json", setCode: "S8", setName: "Teknik Fusion" },
+    { filePath: "scraped_cards_S8A.json", setCode: "S8A", setName: "Koleksi Peringatan Perayaan 25 Tahun" },
+    { filePath: "scraped_cards_S7D.json", setCode: "S7D", setName: "Pencakar Langit Sempurna" },
+    { filePath: "scraped_cards_S7R.json", setCode: "S7R", setName: "Arus Langit Biru" }
 ];
 
 async function seedDatabase() {
@@ -51,14 +71,14 @@ async function seedDatabase() {
         if (!existingSet) {
             const { data: newSet } = await supabase
                 .from('sets')
-                .insert({ 
-                    code: fileInfo.setCode, 
+                .insert({
+                    code: fileInfo.setCode,
                     name: fileInfo.setName,
                     set_order: targetOrder
                 })
                 .select()
                 .single();
-            
+
             existingSet = newSet;
         } else if (existingSet.set_order !== targetOrder) {
             await supabase
@@ -69,9 +89,9 @@ async function seedDatabase() {
 
         const rawData = fs.readFileSync(fullPath, 'utf8');
         const rawCards = JSON.parse(rawData);
-        
+
         const groupedCards = {};
-        
+
         for (const card of rawCards) {
             const num = card.card_number || "unknown";
             if (!groupedCards[num]) groupedCards[num] = [];
@@ -79,10 +99,10 @@ async function seedDatabase() {
         }
 
         const processedCards = [];
-        
+
         for (const num in groupedCards) {
             const group = groupedCards[num];
-            
+
             group.sort((a, b) => (a.image_url || "").localeCompare(b.image_url || ""));
 
             group.forEach((card, index) => {
@@ -101,7 +121,7 @@ async function seedDatabase() {
 
         for (let i = 0; i < processedCards.length; i++) {
             const card = processedCards[i];
-            
+
             console.log(`[${i + 1}/${processedCards.length}] Uploading: ${card.name}`);
 
             await supabase.from('cards').insert({
