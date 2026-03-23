@@ -1,15 +1,48 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
-import { Deck } from "@/types";
-import { getUserDecks, deleteDeck } from "@/app/actions/decks";
-import Link from "next/link";
-import { Layers, Plus, Trash2, CalendarDays, ExternalLink, Loader2 } from "lucide-react";
+import { useEffect, useState } from 'react';
+import { Deck } from '@/types';
+import { getUserDecks } from '@/app/actions/decks';
+import { getCardsByIds } from '@/app/actions/cards.fetch';
+import { PokemonCard } from '@/types';
+import Link from 'next/link';
+import { Layers, Plus, Trash2, CalendarDays, Loader2, Info } from 'lucide-react';
+
+// Simple preview: show first card image as thumbnail
+function DeckThumbnail({ deck }: { deck: Deck }) {
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!deck.cards?.length) return;
+    const firstId = deck.cards[0].cardId;
+    getCardsByIds([firstId]).then((map) => {
+      const card = map[firstId];
+      if (card?.image_url) setImageUrl(card.image_url);
+    });
+  }, [deck.id]);
+
+  if (!imageUrl) {
+    return (
+      <div className="w-full aspect-[63/88] rounded-xl bg-muted/50 border border-border/50 flex items-center justify-center">
+        <Layers size={28} className="text-foreground/15" />
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={imageUrl}
+      alt={deck.name}
+      loading="lazy"
+      className="w-full aspect-[63/88] object-cover rounded-xl border border-border/50"
+    />
+  );
+}
 
 export default function DeckDashboardView() {
   const [decks, setDecks] = useState<Deck[]>([]);
   const [loading, setLoading] = useState(true);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   useEffect(() => {
     fetchDecks();
@@ -22,105 +55,86 @@ export default function DeckDashboardView() {
     setLoading(false);
   };
 
-  const handleDelete = async (e: React.MouseEvent, id: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    if (!confirm("Apakah Anda yakin ingin menghapus deck ini permanen?")) return;
-    
-    setDeletingId(id);
-    const { success } = await deleteDeck(id);
-    if (success) {
-      setDecks((prev) => prev.filter((d) => d.id !== id));
-    } else {
-      alert("Gagal menghapus deck. Silakan coba lagi.");
-    }
-    setDeletingId(null);
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3500);
   };
 
   return (
     <main className="flex flex-col text-foreground py-8">
+      {/* Toast */}
+      {toastMessage && (
+        <div className="fixed top-20 sm:top-24 left-1/2 -translate-x-1/2 z-[100] w-[90%] sm:w-fit max-w-[360px] sm:max-w-none bg-foreground text-background px-4 sm:px-6 py-3 sm:py-3.5 rounded-2xl sm:rounded-full shadow-2xl text-[13px] sm:text-sm flex items-center justify-center sm:justify-start gap-3 animate-in fade-in slide-in-from-top-4">
+          <Info size={18} className="text-background shrink-0" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
       <div className="w-full">
+        {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
           <div>
-            <h1 className="text-3xl  font-[inherit] mb-1.5 flex items-center gap-3">
-              <Layers className="text-blue-500" size={32} />
-              My Decks
+            <h1 className="text-2xl font-semibold mb-1 flex items-center gap-2.5">
+              <Layers size={26} />
+              Deck Saya
             </h1>
-            <p className="text-foreground/60 text-sm  font-[inherit]">
-              Kelola dan rancang 60 kartu deck jagoan Anda sendiri.
-            </p>
+            <p className="text-foreground/50 text-sm">Kelola dan rancang 60 kartu deck jagoan Anda.</p>
           </div>
           <Link
             href="/decks/build"
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-[inherit]  transition-all shadow-lg hover:shadow-blue-500/20 hover:-translate-y-0.5"
+            className="flex items-center gap-2 bg-foreground text-background px-5 py-2.5 rounded-xl text-sm transition-all shadow-sm hover:scale-105"
           >
-            <Plus size={20} />
+            <Plus size={18} />
             Buat Deck Baru
           </Link>
         </div>
 
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20">
-            <Loader2 className="w-10 h-10 animate-spin text-blue-500 mb-4" />
-            <p className="text-foreground/50 ">Memuat Daftar Deck...</p>
+            <Loader2 className="w-8 h-8 animate-spin text-foreground/40 mb-4" />
+            <p className="text-foreground/40 text-sm">Memuat daftar deck…</p>
           </div>
         ) : decks.length === 0 ? (
           <div className="bg-muted/30 border-2 border-dashed border-border/60 rounded-3xl p-12 text-center flex flex-col items-center justify-center">
-            <div className="w-20 h-20 bg-blue-500/10 text-blue-500 rounded-full flex items-center justify-center mb-5">
-              <Layers size={40} />
+            <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mb-5">
+              <Layers size={32} className="text-foreground/30" />
             </div>
-            <h3 className="text-2xl  font-[inherit] mb-3">Belum Ada Deck</h3>
-            <p className="text-foreground/60 max-w-md mx-auto font-[inherit]">
-              Anda belum menyusun satu buah deck pun. Klik tombol di atas untuk mulai merakit kombinasi 60 kartu terkuat Anda!
+            <h3 className="text-xl font-semibold mb-2">Belum Ada Deck</h3>
+            <p className="text-foreground/50 text-sm max-w-md mx-auto">
+              Anda belum menyusun satu buah deck pun. Klik tombol di atas untuk mulai merakit 60 kartu terkuat Anda!
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-5">
             {decks.map((deck) => {
-              const totalCards = deck.cards?.reduce((acc, card) => acc + card.quantity, 0) || 0;
-              const formattedDate = new Date(deck.created_at).toLocaleDateString("id-ID", {
-                day: "numeric",
-                month: "short",
-                year: "numeric"
+              const totalCards = deck.cards?.reduce((acc, c) => acc + c.quantity, 0) ?? 0;
+              const isComplete = totalCards === 60;
+              const formattedDate = new Date(deck.created_at).toLocaleDateString('id-ID', {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric',
               });
 
               return (
                 <Link
                   key={deck.id}
-                  href={`/decks/build?id=${deck.id}`}
-                  className="group relative bg-card/60 backdrop-blur-sm border border-border/50 hover:border-blue-500/50 rounded-2xl p-5 overflow-hidden transition-all hover:shadow-xl hover:shadow-blue-500/10 cursor-pointer flex flex-col h-full"
+                  href={`/decks/${deck.id}`}
+                  className="group relative flex flex-col h-full bg-muted/40 rounded-[20px] border border-border/40 backdrop-blur-sm p-2 sm:p-2.5 gap-3 shadow-sm transition-all duration-300 hover:-translate-y-1.5 hover:shadow-md"
                 >
-                  <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-indigo-500 transform origin-left scale-x-0 group-hover:scale-x-100 transition-transform duration-300"></div>
-                  
-                  <div className="flex justify-between items-start mb-4">
-                    <h3 className="text-xl  font-[inherit] line-clamp-1 pr-4">{deck.name}</h3>
-                    <button 
-                      onClick={(e) => handleDelete(e, deck.id)}
-                      disabled={deletingId === deck.id}
-                      className="text-foreground/40 hover:text-red-500 bg-background/50 hover:bg-red-500/10 p-2 rounded-full transition-colors"
-                      title="Hapus Deck"
-                    >
-                      {deletingId === deck.id ? <Loader2 size={18} className="animate-spin" /> : <Trash2 size={18} />}
-                    </button>
-                  </div>
+                  {/* Thumbnail */}
+                  <DeckThumbnail deck={deck} />
 
-                  <div className="flex items-center gap-4 text-sm mt-auto mb-5">
-                    <div className="flex items-center gap-1.5 text-foreground/70 bg-muted/50 px-3 py-1.5 rounded-lg ">
-                      <Layers size={14} className={totalCards === 60 ? "text-green-500" : "text-amber-500"} />
-                      <span className={totalCards === 60 ? "text-green-500 dark:text-green-400 " : ""}>
-                        {totalCards}/60 Kartu
+                  {/* Info */}
+                  <div className="flex flex-col gap-1 px-1 pb-1">
+                    <h3 className="text-xs sm:text-sm font-semibold line-clamp-1 leading-tight">{deck.name}</h3>
+                    <div className="flex items-center justify-between text-[10px] text-foreground/40">
+                      <span className={`font-medium ${isComplete ? 'text-green-500' : ''}`}>
+                        {totalCards}/60
                       </span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between pt-4 border-t border-border/50 text-xs  text-foreground/50">
-                    <div className="flex items-center gap-1.5">
-                      <CalendarDays size={14} />
-                      {formattedDate}
-                    </div>
-                    <div className="flex items-center gap-1 text-blue-500  opacity-0 group-hover:opacity-100 transform translate-x-2 group-hover:translate-x-0 transition-all">
-                      Edit Deck <ExternalLink size={14} />
+                      <span className="flex items-center gap-1">
+                        <CalendarDays size={10} />
+                        {formattedDate}
+                      </span>
                     </div>
                   </div>
                 </Link>

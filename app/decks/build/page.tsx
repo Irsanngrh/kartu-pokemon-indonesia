@@ -26,9 +26,5 @@ export default async function DeckBuilderPage({
     initialDeck = deck;
   }
 
-  return (
-    <div className="h-[calc(100vh-64px)] overflow-hidden">
-      <DeckBuilderView initialDeck={initialDeck} />
-    </div>
-  );
+  return <DeckBuilderView initialDeck={initialDeck} />;
 }

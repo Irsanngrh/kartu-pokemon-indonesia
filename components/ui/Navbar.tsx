@@ -9,7 +9,7 @@ import { User } from "@supabase/supabase-js";
 import { useRouter, usePathname } from "next/navigation";
 
 export default function Navbar() {
-  const { theme, setTheme } = useTheme();
+  const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   
@@ -64,31 +64,28 @@ export default function Navbar() {
           <span className="truncate">Kartu Pokémon Indonesia</span>
         </Link>
         <div className="flex items-center gap-3 sm:gap-4 shrink-0">
-          <button onClick={() => setTheme(theme === "dark" ? "light" : "dark")} className="p-2 rounded-full bg-muted/50 hover:bg-muted border border-transparent hover:border-border/60 transition-colors shrink-0">
-            {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+          <button onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")} className="p-2 rounded-full bg-muted/50 hover:bg-muted border border-transparent hover:border-border/60 transition-colors shrink-0">
+            {resolvedTheme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
           </button>
           <div className="w-[1px] h-6 bg-border/60 hidden sm:block"></div>
           {user ? (
-            <div className="flex items-center gap-3 shrink-0">
-              <Link href="/decks" className="flex items-center gap-2 text-sm  text-foreground/70 hover:text-foreground transition-colors mr-2">
+            <div className="flex items-center justify-between gap-3 sm:gap-4 shrink-0 lg:w-[315px]">
+              <Link href="/decks" className="flex items-center gap-2 text-sm text-foreground/70 hover:text-foreground transition-colors whitespace-nowrap shrink-0">
                 <Layers size={18} />
                 <span className="hidden sm:inline">Buat Deck</span>
               </Link>
-              <Link href="/collection" className="flex items-center gap-2 text-sm  text-foreground/70 hover:text-foreground transition-colors mr-2">
+              <Link href="/collection" className="flex items-center gap-2 text-sm text-foreground/70 hover:text-foreground transition-colors whitespace-nowrap shrink-0 ml-2 sm:ml-0">
                 <LibrarySquare size={18} />
                 <span className="hidden sm:inline">Koleksi Saya</span>
               </Link>
-              <div className="hidden sm:flex items-center gap-2 bg-muted/30 py-1.5 px-3 rounded-full border border-border/50 shrink-0">
+              <div className="hidden sm:flex items-center justify-center bg-muted/30 p-1 rounded-full border border-border/50 shrink-0" title={user.user_metadata?.full_name || user.email || "User"}>
                 {user.user_metadata?.avatar_url ? (
-                  <img src={user.user_metadata.avatar_url} alt="Avatar" className="w-5 h-5 rounded-full" />
+                  <img src={user.user_metadata.avatar_url} alt="Avatar" className="w-6 h-6 rounded-full object-cover" />
                 ) : (
-                  <div className="w-5 h-5 rounded-full bg-foreground text-background flex items-center justify-center text-[10px]  shrink-0">
-                    {user.email?.charAt(0).toUpperCase()}
+                  <div className="w-6 h-6 rounded-full bg-foreground text-background flex items-center justify-center text-xs font-medium shrink-0">
+                    {user.user_metadata?.full_name?.charAt(0).toUpperCase() || user.email?.charAt(0).toUpperCase() || "U"}
                   </div>
                 )}
-                <span className="text-xs  text-foreground/80 truncate max-w-[100px]">
-                  {user.user_metadata?.full_name?.split(" ")[0] || "User"}
-                </span>
               </div>
               <button onClick={handleLogout} className="p-2 rounded-full bg-muted/50 hover:bg-red-500/10 hover:text-red-500 border border-transparent hover:border-red-500/20 transition-colors shrink-0" >
                 <LogOut size={16} />

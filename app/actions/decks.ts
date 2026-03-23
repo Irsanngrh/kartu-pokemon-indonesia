@@ -1,6 +1,7 @@
 'use server';
 
 import { createClient } from '@/utils/supabase/server';
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { Deck, DeckItem } from '@/types';
 
 export async function getUserDecks(): Promise<{ decks: Deck[]; error?: string }> {
@@ -14,6 +15,7 @@ export async function getUserDecks(): Promise<{ decks: Deck[]; error?: string }>
   const { data, error } = await supabase
     .from('user_decks')
     .select('*')
+    .eq('user_id', userData.user.id)
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -27,18 +29,16 @@ export async function getUserDecks(): Promise<{ decks: Deck[]; error?: string }>
 export async function getDeckById(
   deckId: string
 ): Promise<{ deck: Deck | null; error?: string }> {
-  const supabase = await createClient();
-  const { data: userData, error: userError } = await supabase.auth.getUser();
+  // Use pure Supabase Anon Client to avoid SSR cookie errors for public sharing
+  const publicClient = createSupabaseClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
 
-  if (userError || !userData?.user) {
-    return { deck: null, error: 'Unauthorized' };
-  }
-
-  const { data, error } = await supabase
+  const { data, error } = await publicClient
     .from('user_decks')
     .select('*')
     .eq('id', deckId)
-    .eq('user_id', userData.user.id) // Ensure ownership
     .single();
 
   if (error) {

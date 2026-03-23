@@ -195,7 +195,7 @@ export default function CardDetailView({ initialCards }: { initialCards: Pokemon
   const currentCollection = collectionMap[card.id] || { quantity: 0, is_wishlist: false };
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pb-20 pt-8 relative w-full">
+    <div className="pb-20 pt-8 relative w-full">
       {toastMessage && (
         <div className="fixed top-20 sm:top-24 left-1/2 -translate-x-1/2 z-[100] w-[90%] sm:w-fit max-w-[360px] sm:max-w-none bg-foreground text-background px-4 sm:px-6 py-3 sm:py-3.5 rounded-2xl sm:rounded-full shadow-2xl  text-[13px] sm:text-sm flex items-center justify-center sm:justify-start gap-3 transition-all animate-in fade-in slide-in-from-top-4 text-center sm:text-left leading-relaxed sm:whitespace-nowrap">
           <Info size={18} className="text-background shrink-0" />
@@ -203,12 +203,12 @@ export default function CardDetailView({ initialCards }: { initialCards: Pokemon
         </div>
       )}
       <div className="mb-6">
-        <Link href={backUrl} className="inline-flex items-center gap-2 text-sm text-foreground/50 hover:text-foreground transition-colors w-fit ">
+        <Link href={backUrl} className="inline-flex items-center gap-2 text-sm text-foreground/50 hover:text-foreground transition-colors w-fit">
           <ChevronLeft size={16} /> {backText}
         </Link>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-14 items-start w-full">
-        <div className="lg:col-span-5 flex flex-col items-center gap-6 w-full">
+        <div className="lg:col-span-4 flex flex-col items-center gap-6 w-full">
           <div className="w-full max-w-[380px] lg:max-w-full relative">
             {card.image_url ? (
               <ZoomableImage key={card.id} src={card.image_url} alt={card.name} />
@@ -249,7 +249,7 @@ export default function CardDetailView({ initialCards }: { initialCards: Pokemon
             </button>
           </div>
         </div>
-        <div className="lg:col-span-7 flex flex-col gap-6 w-full">
+        <div className="lg:col-span-8 flex flex-col gap-6 w-full">
           <div className="flex flex-col gap-1">
             <h1 className="text-3xl md:text-4xl  tracking-tight">{card.name}</h1>
             <div className="flex flex-wrap items-center gap-2 mt-1">
@@ -293,27 +293,29 @@ export default function CardDetailView({ initialCards }: { initialCards: Pokemon
                 </div>
               </div>
             )}
-            <div className="flex flex-wrap items-center gap-5 mt-5">
-              {Number(card.hp) > 0 && (
-                <div className="flex items-center gap-1.5">
-                  <span className="text-foreground/40  text-sm tracking-widest uppercase">HP</span>
-                  <span className="text-3xl  leading-none">{card.hp}</span>
-                </div>
-              )}
-              {card.types && card.types.length > 0 && (
-                <>
-                  {Number(card.hp) > 0 && <span className="text-border text-2xl font-light hidden sm:block">/</span>}
-                  <div className="flex items-center gap-2">
-                    <span className="text-foreground/40  text-sm tracking-widest uppercase">TIPE</span>
-                    <div className="flex items-center gap-1">
-                      {card.types.map((imgUrl: string, index: number) => (
-                        <img key={index} src={imgUrl} alt="Type" className="object-contain drop-shadow-sm w-6 h-6" />
-                      ))}
-                    </div>
+            {(Number(card.hp) > 0 || (card.types && card.types.length > 0)) && (
+              <div className="flex flex-wrap items-center gap-5 mt-5">
+                {Number(card.hp) > 0 && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-foreground/40  text-sm tracking-widest uppercase">HP</span>
+                    <span className="text-3xl  leading-none">{card.hp}</span>
                   </div>
-                </>
-              )}
-            </div>
+                )}
+                {card.types && card.types.length > 0 && (
+                  <>
+                    {Number(card.hp) > 0 && <span className="text-border text-2xl font-light hidden sm:block">/</span>}
+                    <div className="flex items-center gap-2">
+                      <span className="text-foreground/40  text-sm tracking-widest uppercase">TIPE</span>
+                      <div className="flex items-center gap-1">
+                        {card.types.map((imgUrl: string, index: number) => (
+                          <img key={index} src={imgUrl} alt="Type" className="object-contain drop-shadow-sm w-6 h-6" />
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
             {(card.pokedex_number || card.species || card.height || card.weight) && (
               <div className="mt-4 flex flex-wrap items-center gap-2.5 text-xs  text-foreground/50">
                 {card.pokedex_number && <span>Pokédex No. {card.pokedex_number.replace(/No\.?/ig, '').trim()}</span>}
@@ -415,7 +417,7 @@ export default function CardDetailView({ initialCards }: { initialCards: Pokemon
             </div>
           </div>
         </div>
-      </div>
+      </div>{/* end grid */}
     </div>
   );
 }

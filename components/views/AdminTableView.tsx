@@ -17,6 +17,8 @@ export default function AdminTableView({ initialCards, availableSets }: { initia
   const [formData, setFormData] = useState<any>({});
   const [isSaving, setIsSaving] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 100;
 
   const supabase = createClient();
 
@@ -65,9 +67,15 @@ export default function AdminTableView({ initialCards, availableSets }: { initia
     });
   }, [cards, searchQuery, expansionFilter]);
 
+  // Reset page when filters change
+  useEffect(() => { setPage(0); }, [searchQuery, expansionFilter]);
+
+  const totalPages = Math.ceil(filteredCards.length / PAGE_SIZE);
+  const paginatedCards = filteredCards.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
   const openModal = async (card?: any) => {
     if (card) {
-      // Lazy Fetching: Mengambil data berat (attacks, deskripsi) HANYA saat tombol edit ditekan
+      // Lazy Fetching: Fetch heavy payload (attacks, descriptions) ONLY when the edit button is triggered
       setFetchingId(card.id);
       const { data: fullCardData, error } = await supabase
         .from("cards")
@@ -222,6 +230,17 @@ export default function AdminTableView({ initialCards, availableSets }: { initia
         </button>
       </div>
 
+      {/* Pagination controls */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-foreground/50 text-xs">{filteredCards.length} kartu • Halaman {page + 1}/{totalPages}</span>
+          <div className="flex items-center gap-2">
+            <button disabled={page === 0} onClick={() => { setPage(p => p - 1); scrollToTop(); }} className="px-3 py-1.5 text-xs rounded-lg border border-border/50 hover:bg-muted disabled:opacity-30 transition-colors">← Sebelumnya</button>
+            <button disabled={page >= totalPages - 1} onClick={() => { setPage(p => p + 1); scrollToTop(); }} className="px-3 py-1.5 text-xs rounded-lg border border-border/50 hover:bg-muted disabled:opacity-30 transition-colors">Selanjutnya →</button>
+          </div>
+        </div>
+      )}
+
       <div className="bg-background border border-border/60 rounded-2xl shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm whitespace-nowrap">
@@ -237,7 +256,7 @@ export default function AdminTableView({ initialCards, availableSets }: { initia
               </tr>
             </thead>
             <tbody className="divide-y divide-border/40">
-              {filteredCards.map((card) => (
+              {paginatedCards.map((card) => (
                 <tr key={card.id} className="hover:bg-muted/20 transition-colors">
                   <td className="px-4 py-2">
                     {card.image_url ? (

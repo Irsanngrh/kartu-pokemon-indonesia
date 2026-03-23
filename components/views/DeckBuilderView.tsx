@@ -7,7 +7,7 @@ import { fetchCardsBasedOnFilters, fetchFilterOptions, getCardsByIds } from "@/a
 import { createDeck, updateDeck } from "@/app/actions/decks";
 import CustomDropdown from "@/components/ui/CustomDropdown";
 import DeckCardItem from "@/components/ui/DeckCardItem";
-import { Search, Loader2, Save, ChevronLeft, AlertCircle, Plus, Edit2 } from "lucide-react";
+import { Search, Loader2, Save, ChevronLeft, AlertCircle, Plus, Edit2, ArrowUp } from "lucide-react";
 import { DECK_MAX_CARDS, DECK_MAX_COPIES_PER_NAME, DECK_MAX_BASIC_ENERGY, BASIC_ENERGY_KEYWORDS } from "@/lib/constants";
 
 export default function DeckBuilderView({ initialDeck }: { initialDeck: Deck | null }) {
@@ -18,6 +18,10 @@ export default function DeckBuilderView({ initialDeck }: { initialDeck: Deck | n
   const [deckCards, setDeckCards] = useState<DeckItem[]>(initialDeck?.cards || []);
   const [isSaving, setIsSaving] = useState(false);
   const [toastMessage, setToastMessage] = useState<{ type: 'error' | 'success', text: string } | null>(null);
+  const [mobileTab, setMobileTab] = useState<'catalog' | 'deck'>('catalog');
+  const [showScrollTop, setShowScrollTop] = useState(false);
+  const catalogScrollRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
 
   const [fullCardObjects, setFullCardObjects] = useState<{ [id: number]: PokemonCardType }>({});
 
@@ -31,6 +35,7 @@ export default function DeckBuilderView({ initialDeck }: { initialDeck: Deck | n
   }, [initialDeck]);
 
   const showToast = (text: string, type: 'error' | 'success' = 'error') => {
+    // Clear existing timeout if present to prevent overlapping toasts clearing too early
     setToastMessage({ text, type });
     setTimeout(() => setToastMessage(null), 3000);
   };
@@ -75,6 +80,7 @@ export default function DeckBuilderView({ initialDeck }: { initialDeck: Deck | n
       }
       return [...prev, { cardId: card.id, quantity: 1 }];
     });
+    showToast(`1 kartu ${card.name} ditambahkan`, 'success');
   };
 
   const handleDecreaseCard = (card: PokemonCardType) => {
@@ -86,41 +92,49 @@ export default function DeckBuilderView({ initialDeck }: { initialDeck: Deck | n
       }
       return prev.map(p => p.cardId === card.id ? { ...p, quantity: p.quantity - 1 } : p);
     });
+    showToast(`1 kartu ${card.name} dihapus dari deck`, 'error');
   };
 
   const handleRemoveCard = (card: PokemonCardType) => {
     setDeckCards(prev => prev.filter(p => p.cardId !== card.id));
+    showToast(`Kartu ${card.name} dihapus seluruhnya dari deck`, 'error');
   };
 
 
   const handleSaveDeck = async () => {
     if (!deckName.trim()) {
-      showToast("Nama deck tidak boleh kosong!");
+      showToast('Nama deck tidak boleh kosong!');
       return;
     }
     setIsSaving(true);
     let success = false;
-    let err = null;
+    let savedId: string | null = initialDeck?.id ?? null;
 
     if (initialDeck) {
       const res = await updateDeck(initialDeck.id, deckName, deckCards);
       success = !!res.deck;
-      err = res.error;
+      if (!success) showToast(`Gagal menyimpan: ${res.error}`);
     } else {
       const res = await createDeck(deckName, deckCards);
       success = !!res.deck;
-      err = res.error;
       if (success && res.deck) {
-        // Change URL to edit mode quietly
-        window.history.replaceState({}, '', `/decks/build?id=${res.deck.id}`);
+        savedId = res.deck.id;
+        window.history.replaceState({}, '', `/decks/build?id=${savedId}`);
+      } else {
+        showToast(`Gagal menyimpan: ${res.error}`);
       }
     }
 
     setIsSaving(false);
-    if (success) {
-      showToast("Deck berhasil disimpan!", "success");
+    if (success) showToast('Deck berhasil disimpan!', 'success');
+  };
+
+  // Back button: go to /decks/[id] if editing, otherwise /decks
+  const handleBack = () => {
+    if (initialDeck?.id) {
+      router.push(`/decks/${initialDeck.id}`);
     } else {
-      showToast(`Gagal menyimpan: ${err}`);
+      router.push('/decks');
     }
   };
 
@@ -145,8 +159,8 @@ export default function DeckBuilderView({ initialDeck }: { initialDeck: Deck | n
   useEffect(() => {
     let isMounted = true;
     const fetchOptions = async () => {
-       const opts = await fetchFilterOptions(expansionFilter);
-       if (isMounted) setFilterOptions(opts);
+      const opts = await fetchFilterOptions({ expansionFilter, cardTypeFilter });
+      if (isMounted) setFilterOptions(opts);
     };
     fetchOptions();
     return () => { isMounted = false; };
@@ -154,26 +168,28 @@ export default function DeckBuilderView({ initialDeck }: { initialDeck: Deck | n
 
   const fetchCatalog = async (pageToFetch: number, overwrite: boolean = false) => {
     setIsLoadingCards(true);
-    const filters = { 
-      searchQuery: debouncedQuery, 
-      expansionFilter, 
-      cardTypeFilter, 
-      elementFilter: "Semua", 
-      stageFilter: "Semua", 
-      illustratorFilter: "Semua", 
-      regulationFilter: "Semua", 
-      rarityFilter: "Semua" 
+    const filters = {
+      searchQuery: debouncedQuery,
+      expansionFilter,
+      cardTypeFilter,
+      elementFilter: 'Semua',
+      stageFilter: 'Semua',
+      illustratorFilter: 'Semua',
+      regulationFilter: 'Semua',
+      rarityFilter: 'Semua',
     };
-    const { cards, hasMore, totalCount } = await fetchCardsBasedOnFilters(filters, pageToFetch, 30);
-    
-    // Store them in fullCardObjects so the right panel can read them if clicked
-    const cardObjMap = { ...fullCardObjects };
-    cards.forEach(c => cardObjMap[c.id] = c);
-    setFullCardObjects(cardObjMap);
+    const { cards, hasMore } = await fetchCardsBasedOnFilters(filters, pageToFetch, 30);
+
+    // Merge fetched cards into fullCardObjects for display in the right panel
+    setFullCardObjects((prev) => {
+      const next = { ...prev };
+      cards.forEach((c) => { next[c.id] = c; });
+      return next;
+    });
 
     if (overwrite) setFetchedCards(cards);
-    else setFetchedCards(prev => [...prev, ...cards]);
-    
+    else setFetchedCards((prev) => [...prev, ...cards]);
+
     setHasMoreServer(hasMore);
     setCurrentPage(pageToFetch);
     setIsLoadingCards(false);
@@ -183,14 +199,7 @@ export default function DeckBuilderView({ initialDeck }: { initialDeck: Deck | n
     fetchCatalog(0, true);
   }, [debouncedQuery, expansionFilter, cardTypeFilter]);
 
-  // Special fetch to populate full card objects for initially loaded decks
-  useEffect(() => {
-    if (initialDeck && initialDeck.cards.length > 0) {
-      // Extremely basic hydration for the demo. In production, we should specifically
-      // fetch WHERE id IN (deck items). Since our search is text based, we'll wait for the user to type 
-      // or we just assume they'll surface. For a perfect UX, you'd add an endpoint to get cards by array of IDs.
-    }
-  }, [initialDeck]);
+
 
   useEffect(() => {
     const currentObserver = new IntersectionObserver(
@@ -205,37 +214,68 @@ export default function DeckBuilderView({ initialDeck }: { initialDeck: Deck | n
     return () => { if (loaderRef.current) currentObserver.unobserve(loaderRef.current); };
   }, [hasMoreServer, isLoadingCards, currentPage]);
 
+  // Show scroll-to-top when the filter header leaves the viewport
+  useEffect(() => {
+    if (!headerRef.current) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setShowScrollTop(!entry.isIntersecting),
+      { threshold: 0 }
+    );
+    observer.observe(headerRef.current);
+    return () => observer.disconnect();
+  }, []);
+
   const cardTypes = ["Semua", "Pokémon", "Item", "Supporter", "Stadium", "Pokémon Tool", "Energy"];
 
 
   return (
-    <div className="flex flex-col lg:flex-row h-full overflow-hidden bg-background max-w-[1400px] mx-auto w-full border-x border-border/20 shadow-sm relative">
+    <div className="flex flex-col lg:flex-row gap-0 relative -ml-4 sm:-ml-6 lg:-ml-8 w-[calc(100%+1rem)] sm:w-[calc(100%+1.5rem)] lg:w-[calc(100%+2rem)]">
       {/* Toast */}
       {toastMessage && (
-        <div className={`fixed top-16 left-1/2 -translate-x-1/2 z-[100] px-6 py-3 rounded-full shadow-2xl  text-sm flex items-center gap-2 animate-in slide-in-from-top-4 ${toastMessage.type === 'error' ? 'bg-red-500 text-white' : 'bg-green-500 text-white'}`}>
-          <AlertCircle size={18} /> {toastMessage.text}
+        <div className={`fixed top-16 left-1/2 -translate-x-1/2 z-[100] px-4 sm:px-6 py-3 rounded-2xl sm:rounded-full shadow-2xl text-xs sm:text-sm flex items-center gap-2.5 w-max max-w-[92vw] animate-in slide-in-from-top-4 ${toastMessage.type === 'error' ? 'bg-red-500 text-white' : 'bg-green-500 text-white'}`}>
+          <AlertCircle size={18} className="shrink-0" /> 
+          <span className="leading-snug">{toastMessage.text}</span>
         </div>
       )}
 
+      {/* Mobile Tab Switcher */}
+      <div className="flex lg:hidden border-b border-border bg-background shrink-0">
+        <button
+          onClick={() => setMobileTab('catalog')}
+          className={`flex-1 py-3 text-sm transition-colors ${mobileTab === 'catalog' ? 'border-b-2 border-foreground text-foreground' : 'text-foreground/50'}`}
+        >
+          Katalog Kartu
+        </button>
+        <button
+          onClick={() => setMobileTab('deck')}
+          className={`flex-1 py-3 text-sm transition-colors relative ${mobileTab === 'deck' ? 'border-b-2 border-foreground text-foreground' : 'text-foreground/50'}`}
+        >
+          Deck Saya
+          {deckCards.length > 0 && (
+            <span className="ml-1.5 bg-foreground text-background text-[10px] rounded-full px-1.5 py-0.5">{totalCardsInDeck}</span>
+          )}
+        </button>
+      </div>
+
       {/* LEFT PANEL: CATALOG */}
-      <div className="flex-1 w-full lg:w-2/3 h-auto min-h-[50vh] lg:h-full flex flex-col border-b lg:border-b-0 lg:border-r border-border lg:overflow-hidden">
-        
-        {/* Header Left */}
-        <div className="p-4 border-b border-border bg-muted/20 flex flex-col gap-3 shrink-0">
+      <div className={`${mobileTab === 'catalog' ? 'flex' : 'hidden'} lg:flex flex-1 flex-col border-b lg:border-b-0 lg:border-r border-border/50 min-w-0`}>
+
+        {/* Header Left — padding compensates for parent negative margin to align with navbar */}
+        <div ref={headerRef} className="pl-4 sm:pl-6 lg:pl-8 pr-0 lg:pr-8 pt-4 pb-4 border-b border-border bg-muted/20 flex flex-col gap-3 shrink-0">
           <div className="flex items-center gap-3 mb-2">
-            <button onClick={() => router.push('/decks')} className="inline-flex items-center gap-2 text-sm text-foreground/50 hover:text-foreground transition-colors w-fit cursor-pointer">
+            <button onClick={handleBack} className="inline-flex items-center gap-2 text-sm text-foreground/50 hover:text-foreground transition-colors w-fit cursor-pointer">
               <ChevronLeft size={16} /> Kembali ke Deck
             </button>
           </div>
-          
+
           <div className="flex flex-col gap-3">
             <div className="relative flex-1 flex flex-col gap-1 w-full">
               <span className="text-[10px] items-end  uppercase tracking-widest text-foreground/50 ml-1">Pencarian</span>
               <div className="relative w-full">
                 <Search className="absolute left-3 top-[50%] -translate-y-[50%] text-foreground/40 pointer-events-none" size={16} />
-                <input 
-                  type="text" 
-                  placeholder="Cari nama kartu..." 
+                <input
+                  type="text"
+                  placeholder="Cari nama kartu Pokémon..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full font-[inherit] pl-9 pr-3 h-[42px] bg-background border border-border/50 rounded-xl text-sm transition-all focus:outline-none focus:ring-1 focus:ring-foreground/30 shadow-sm"
@@ -244,24 +284,24 @@ export default function DeckBuilderView({ initialDeck }: { initialDeck: Deck | n
             </div>
             <div className="flex gap-2 w-full">
               <div className="flex-1 min-w-[120px]">
-                 <CustomDropdown label="Ekspansi" options={filterOptions.expansions || ["Semua"]} value={expansionFilter} onChange={setExpansionFilter} />
+                <CustomDropdown label="Ekspansi" options={filterOptions.expansions || ["Semua"]} value={expansionFilter} onChange={setExpansionFilter} />
               </div>
               <div className="flex-1 min-w-[120px]">
-                 <CustomDropdown label="Jenis" options={cardTypes} value={cardTypeFilter} onChange={setCardTypeFilter} />
+                <CustomDropdown label="Jenis Kartu" options={cardTypes} value={cardTypeFilter} onChange={setCardTypeFilter} />
               </div>
             </div>
           </div>
         </div>
 
-        {/* Catalog Grid Left */}
-        <div className="flex-1 overflow-visible lg:overflow-y-auto p-4 lg:custom-scrollbar">
+        {/* Catalog Grid */}
+        <div ref={catalogScrollRef} className="pl-4 sm:pl-6 lg:pl-8 pr-0 lg:pr-8 py-4 relative">
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 pb-4 lg:pb-20">
-            {fetchedCards.map((card) => (
-              <div key={card.id} className="relative group cursor-pointer" onClick={() => handleAddCard(card)}>
-                <img 
-                  src={card.image_url} 
-                  alt={card.name} 
-                  className="w-full h-auto rounded-lg shadow-sm border border-border/10 group-hover:shadow-md group-hover:border-blue-500/50 transition-all group-active:scale-95"
+            {fetchedCards.map((card, cardIndex) => (
+              <div key={`${card.id}_${cardIndex}`} className="relative group cursor-pointer" onClick={() => handleAddCard(card)}>
+                <img
+                  src={card.image_url}
+                  alt={card.name}
+                  className="w-full h-auto rounded-lg shadow-sm border border-border/10 group-hover:shadow-md group-hover:border-foreground/30 transition-all group-active:scale-95"
                   loading="lazy"
                 />
                 {/* Overlay Add Button */}
@@ -274,25 +314,47 @@ export default function DeckBuilderView({ initialDeck }: { initialDeck: Deck | n
             ))}
           </div>
           {isLoadingCards && <div className="py-8 flex justify-center"><Loader2 className="animate-spin text-foreground/30" size={24} /></div>}
+          {!isLoadingCards && fetchedCards.length === 0 && (
+            <div className="col-span-full py-16 flex flex-col items-center justify-center gap-3">
+              <span className="text-4xl grayscale opacity-50">🔍</span>
+              <p className="text-foreground/50 text-sm uppercase tracking-widest">Kartu tidak ditemukan</p>
+            </div>
+          )}
           <div ref={loaderRef} className="h-4 w-full"></div>
         </div>
+
+        {/* Scroll-to-top: sticky positioning perfectly locked entirely within LEFT panel */}
+        {showScrollTop && (
+          <div className="sticky bottom-4 lg:bottom-6 flex justify-end pr-4 sm:pr-6 lg:pr-12 pointer-events-none z-50 mt-[-50px]">
+            <button
+              onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+              className="p-4 bg-foreground text-background rounded-full shadow-xl hover:scale-110 transition-transform pointer-events-auto border border-border/20"
+              title="Kembali ke atas"
+            >
+              <ArrowUp size={26} strokeWidth={2.5} />
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* RIGHT PANEL: DECK CANVAS */}
-      <div className="w-full lg:w-1/3 lg:min-w-[320px] lg:max-w-[500px] h-full min-h-[50vh] bg-slate-50 dark:bg-muted/30 border-t-2 border-border/50 lg:border-t-0 flex flex-col shrink-0">
-        <div className="p-4 border-b border-border bg-slate-50 dark:bg-transparent flex flex-col gap-4 shadow-sm lg:shadow-none shrink-0">
-          <div className="relative flex items-center group">
-            <input 
-              type="text" 
+
+
+      {/* RIGHT PANEL: DECK CANVAS — no border-l; left panel's border-r acts as separator */}
+      <div className={`${mobileTab === 'deck' ? 'flex' : 'hidden'} lg:flex lg:sticky lg:top-[64px] lg:self-start w-full lg:w-[calc(315px+16px)] shrink-0 flex-col bg-background lg:max-h-[calc(100vh-64px)] lg:overflow-y-auto`}>
+        <div className="pl-4 pr-0 pt-4 pb-4 border-b border-border bg-background dark:bg-muted/10 flex flex-col gap-4 shrink-0">
+          {/* Deck name input with border */}
+          <div className="flex items-center gap-2 border border-border rounded-xl px-3 py-2 mr-0 focus-within:ring-1 focus-within:ring-foreground/20">
+            <input
+              type="text"
               value={deckName}
               onChange={(e) => setDeckName(e.target.value)}
-              className="w-full font-[inherit] bg-transparent text-sm lg:text-base border-none outline-none focus:ring-0 px-0 pr-8 placeholder-foreground/20"
+              className="flex-1 font-[inherit] bg-transparent text-sm lg:text-base border-none outline-none focus:ring-0 px-0 placeholder-foreground/20"
               placeholder="Nama Deck Anda..."
             />
-            <Edit2 size={16} className="absolute right-2 text-foreground/50 transition-opacity pointer-events-none" />
+            <Edit2 size={15} className="text-foreground/40 pointer-events-none shrink-0" />
           </div>
-          
-          <div className="flex items-center justify-between">
+
+          <div className="flex items-center justify-between mr-0">
             <div className="flex items-center gap-2">
               <span className={`text-sm lg:text-base ${totalCardsInDeck > 60 ? 'text-red-500' : 'text-foreground'}`}>
                 {totalCardsInDeck}
@@ -300,14 +362,13 @@ export default function DeckBuilderView({ initialDeck }: { initialDeck: Deck | n
               <span className="text-xs text-foreground/50">/ 60 Kartu</span>
             </div>
 
-            <button 
+            <button
               onClick={handleSaveDeck}
               disabled={isSaving}
-              className={`flex items-center gap-2 px-4 py-2 text-sm rounded-xl font-[inherit] transition-all shadow-sm cursor-pointer ${
-                totalCardsInDeck > 60 
-                  ? 'bg-muted/50 text-foreground/40 cursor-not-allowed' 
-                  : 'bg-foreground text-background hover:scale-105'
-              }`}
+              className={`flex items-center gap-2 px-4 py-2 text-sm rounded-xl font-[inherit] transition-all shadow-sm cursor-pointer ${totalCardsInDeck > 60
+                ? 'bg-muted/50 text-foreground/40 cursor-not-allowed'
+                : 'bg-foreground text-background hover:opacity-90 active:scale-95'
+                }`}
             >
               {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
               Simpan
@@ -315,13 +376,11 @@ export default function DeckBuilderView({ initialDeck }: { initialDeck: Deck | n
           </div>
         </div>
 
-        {/* Deck List Array By Category */}
-        <div className="flex-1 overflow-visible lg:overflow-y-auto p-4 lg:custom-scrollbar flex flex-col gap-5">
+        <div className="flex-1 lg:overflow-y-auto lg:overflow-x-hidden lg:overscroll-contain pl-4 lg:pl-6 pr-0 lg:pr-6 pt-5 lg:pt-6 pb-6 lg:custom-scrollbar flex flex-col gap-5">
           {deckCards.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-center p-6 opacity-40">
-              <div className="text-4xl mb-4">🎴</div>
-              <p className=" text-sm">Kanvas Anda Masih Kosong</p>
-              <p className="text-xs mt-1">Klik kartu di katalog sebelah kiri untuk menambahkannya ke deck ini.</p>
+            <div className="flex flex-col items-center justify-center h-full text-center py-10 opacity-40">
+              <p className="text-sm">Kanvas Anda Masih Kosong</p>
+              <p className="text-xs mt-1">Klik kartu di katalog untuk menambahkannya.</p>
             </div>
           ) : (
             <>
@@ -329,10 +388,10 @@ export default function DeckBuilderView({ initialDeck }: { initialDeck: Deck | n
                 const itemsInCategory = deckCards.filter(item => {
                   const c = fullCardObjects[item.cardId];
                   if (!c) return category === "Pokemon"; // Default unmatched to Pokemon
-                  
+
                   const isEnergy = c.name.toLowerCase().includes("energi") || c.name.toLowerCase().includes("energy");
                   const isTrainer = !c.hp && !c.types?.length && !isEnergy;
-                  
+
                   if (category === "Energy") return isEnergy;
                   if (category === "Trainer") return isTrainer;
                   return !isTrainer && !isEnergy;
@@ -348,12 +407,12 @@ export default function DeckBuilderView({ initialDeck }: { initialDeck: Deck | n
                       {category} ({categoryCount})
                     </h3>
                     {itemsInCategory.map(item => {
-                      const displayCard = fullCardObjects[item.cardId] || { 
-                        id: item.cardId, name: `Memuat Kartu...`, image_url: "", sets: { code: "" }, card_number: "" 
+                      const displayCard = fullCardObjects[item.cardId] || {
+                        id: item.cardId, name: `Memuat Kartu...`, image_url: "", sets: { code: "" }, card_number: ""
                       } as any;
 
                       return (
-                        <DeckCardItem 
+                        <DeckCardItem
                           key={item.cardId}
                           card={displayCard}
                           quantity={item.quantity}

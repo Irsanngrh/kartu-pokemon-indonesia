@@ -8,35 +8,38 @@ import { PokemonCard as PokemonCardType } from "@/types";
 
 interface PokemonCardProps {
   card: PokemonCardType;
-  source?: "library" | "collection" | "wishlist";
+  source?: 'library' | 'collection' | 'wishlist';
+  priority?: boolean;
 }
 
-export default function PokemonCard({ card, source = "library" }: PokemonCardProps) {
-  const [imageState, setImageState] = useState<"loading" | "loaded" | "error">("loading");
+export default function PokemonCard({ card, source = 'library', priority = false }: PokemonCardProps) {
+  // Priority (above-the-fold) cards start as 'loaded' to avoid the
+  // opacity-0 → opacity-100 transition blank that afflicts first rows on page load.
+  const [imageState, setImageState] = useState<'loading' | 'loaded' | 'error'>(priority ? 'loaded' : 'loading');
   const [retryCount, setRetryCount] = useState(0);
 
-  const urlCardNumber = (card.card_number || "000").split('/')[0].trim();
+  const urlCardNumber = (card.card_number || '000').split('/')[0].trim();
   
   let queryParams = new URLSearchParams();
   
   if (card.variant_name) {
     const cleanVariant = card.variant_name.toLowerCase().replace(/\s+/g, '-');
-    queryParams.append("variant", cleanVariant);
+    queryParams.append('variant', cleanVariant);
   }
   
-  if (source !== "library") queryParams.append("from", source);
+  if (source !== 'library') queryParams.append('from', source);
   
-  const qs = queryParams.toString() ? `?${queryParams.toString()}` : "";
-  const hrefUrl = `/${card.sets?.code || "unknown"}/${urlCardNumber}${qs}`;
+  const qs = queryParams.toString() ? `?${queryParams.toString()}` : '';
+  const hrefUrl = `/${card.sets?.code || 'unknown'}/${urlCardNumber}${qs}`;
 
   const handleImageError = () => {
     if (retryCount < 3) {
       setTimeout(() => {
         setRetryCount(prev => prev + 1);
-        setImageState("loading");
+        setImageState('loading');
       }, 1500 * (retryCount + 1));
     } else {
-      setImageState("error");
+      setImageState('error');
     }
   };
 
@@ -46,15 +49,15 @@ export default function PokemonCard({ card, source = "library" }: PokemonCardPro
     <Link href={hrefUrl}>
       <div className="group relative flex flex-col h-full bg-muted/40 rounded-[20px] border border-border/40 backdrop-blur-sm p-2 sm:p-2.5 gap-3 shadow-sm transition-all duration-300 hover:-translate-y-1.5 hover:shadow-md cursor-pointer">
         <div className="relative w-full aspect-[63/88] rounded-xl overflow-hidden bg-muted/50 border border-border/50 flex items-center justify-center">
-          {imageState === "loading" && (
+          {imageState === 'loading' && (
              <div className="absolute inset-0 flex items-center justify-center text-foreground/20 animate-pulse">
                <ImageIcon size={32} />
              </div>
           )}
-          {imageState === "error" && (
+          {imageState === 'error' && (
              <div className="absolute inset-0 flex flex-col gap-2 items-center justify-center text-red-500/50">
                <AlertCircle size={28} />
-               <span className="text-[9px]  uppercase tracking-widest text-center">Gagal<br/>Memuat</span>
+               <span className="text-[9px] uppercase tracking-widest text-center">Gagal<br/>Memuat</span>
              </div>
           )}
           {card.image_url ? (
@@ -62,13 +65,13 @@ export default function PokemonCard({ card, source = "library" }: PokemonCardPro
               key={imgSrc}
               src={imgSrc} 
               alt={card.name}
-              onLoad={() => setImageState("loaded")}
+              onLoad={() => setImageState('loaded')}
               onError={handleImageError}
-              className={`w-full h-full object-cover transition-opacity duration-500 ${imageState === "loaded" ? 'opacity-100' : 'opacity-0'}`}
-              loading="lazy"
+              className={`w-full h-full object-cover transition-opacity duration-300 ${imageState === 'loaded' ? 'opacity-100' : 'opacity-0'}`}
+              loading={priority ? 'eager' : 'lazy'}
             />
           ) : (
-            <span className="text-[10px]  text-foreground/40 uppercase tracking-widest">No Image</span>
+            <span className="text-[10px] text-foreground/40 uppercase tracking-widest">No Image</span>
           )}
         </div>
         <div className="flex flex-col gap-1 px-1 pb-1">
@@ -82,7 +85,7 @@ export default function PokemonCard({ card, source = "library" }: PokemonCardPro
               </span>
             )}
           </div>
-          <h3 className="text-sm  leading-tight truncate group-hover:text-blue-500 transition-colors">
+          <h3 className="text-sm leading-tight truncate transition-colors">
             {card.name}
           </h3>
           <div className="flex items-center gap-1.5">

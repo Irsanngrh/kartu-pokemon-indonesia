@@ -5,7 +5,7 @@ export const revalidate = 3600;
 
 export default async function HomePage() {
   const initialData = await fetchCardsBasedOnFilters({}, 0, 30);
-  const filterOptions = await fetchFilterOptions("Semua");
+  const filterOptions = await fetchFilterOptions({});
 
   if (initialData.error) return <div className="p-10 text-center text-red-500">Gagal memuat database: {initialData.error}</div>;
 

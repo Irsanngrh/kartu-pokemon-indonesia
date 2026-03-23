@@ -12,8 +12,7 @@ interface DeckCardItemProps {
 }
 
 export default function DeckCardItem({ card, quantity, onIncrease, onDecrease, onRemove }: DeckCardItemProps) {
-  // Removed colored backgrounds
-  let bgColor = "bg-muted/30 border-border/60 text-foreground";
+  const bgColor = "bg-muted/30 border-border/60 text-foreground";
 
   return (
     <div className={`flex items-center gap-3 p-2 rounded-xl border ${bgColor} transition-all relative group`}>

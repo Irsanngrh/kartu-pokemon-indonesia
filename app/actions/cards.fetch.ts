@@ -193,9 +193,11 @@ export async function getCardsByIds(
   return result;
 }
 
-export async function fetchFilterOptions(expansionFilter: string) {
+export async function fetchFilterOptions(filters: FilterParams) {
   const allCards = await getAllCardsForFiltering();
+  const { expansionFilter = 'Semua', cardTypeFilter = 'Semua', elementFilter = 'Semua', stageFilter = 'Semua', illustratorFilter = 'Semua', regulationFilter = 'Semua', rarityFilter = 'Semua' } = filters;
 
+  // Expansions always show all sets
   const setMap = new Map<string, number>();
   for (const c of allCards) {
     if (c.sets) {
@@ -208,60 +210,57 @@ export async function fetchFilterOptions(expansionFilter: string) {
     .map(([name]) => name);
   const expansions = ['Semua', ...sortedSets];
 
-  let filtered = allCards;
+  // Base subset: filter by expansion + cardType
+  let base = allCards;
   if (expansionFilter !== 'Semua') {
-    filtered = allCards.filter((card) => {
-      const exp = card.sets ? `${card.sets.name} (${card.sets.code})` : '';
+    base = base.filter((c) => {
+      const exp = c.sets ? `${c.sets.name} (${c.sets.code})` : '';
       return exp === expansionFilter;
     });
   }
+  if (cardTypeFilter !== 'Semua') {
+    base = base.filter((c) => getCardType(c) === cardTypeFilter);
+  }
 
+  // For each secondary filter list, compute options from cards matching ALL OTHER active filters
+  const matchFor = (excludeKey: keyof FilterParams): PokemonCard[] => {
+    return base.filter((c) => {
+      if (excludeKey !== 'elementFilter' && elementFilter !== 'Semua' && c.hp) {
+        if (!getElements(c).includes(elementFilter)) return false;
+      }
+      if (excludeKey !== 'stageFilter' && stageFilter !== 'Semua' && c.hp) {
+        if (!getStageInfo(c).includes(stageFilter)) return false;
+      }
+      if (excludeKey !== 'illustratorFilter' && illustratorFilter !== 'Semua') {
+        if (c.illustrator !== illustratorFilter) return false;
+      }
+      if (excludeKey !== 'regulationFilter' && regulationFilter !== 'Semua') {
+        if (c.regulation_mark !== regulationFilter) return false;
+      }
+      if (excludeKey !== 'rarityFilter' && rarityFilter !== 'Semua') {
+        if (c.rarity !== rarityFilter) return false;
+      }
+      return true;
+    });
+  };
+
+  const illustratorCards = matchFor('illustratorFilter');
   const illustrators = [
     'Semua',
-    ...Array.from(new Set(filtered.map((c) => c.illustrator).filter(Boolean)))
-      .sort()
-      .map(String),
-  ];
-  const regulations = [
-    'Semua',
-    ...Array.from(
-      new Set(filtered.map((c) => c.regulation_mark).filter(Boolean))
-    )
-      .sort()
-      .map(String),
+    ...Array.from(new Set(illustratorCards.map((c) => c.illustrator).filter(Boolean))).sort().map(String),
   ];
 
-  const rarityOrder = [
-    'Tanpa Tanda',
-    'C',
-    'U',
-    'R',
-    'RR',
-    'ACE',
-    'RRR',
-    'AR',
-    'PR',
-    'TR',
-    'SR',
-    'MA',
-    'HR',
-    'UR',
-    'K',
-    'A',
-    'SAR',
-    'S',
-    'SSR',
-    'BWR',
-    'MUR',
+  const regulationCards = matchFor('regulationFilter');
+  const regulations = [
+    'Semua',
+    ...Array.from(new Set(regulationCards.map((c) => c.regulation_mark).filter(Boolean))).sort().map(String),
   ];
-  const existingRarities = new Set(
-    filtered.map((c) => c.rarity).filter(Boolean)
-  );
+
+  const rarityCards = matchFor('rarityFilter');
+  const rarityOrder = ['Tanpa Tanda', 'C', 'U', 'R', 'RR', 'ACE', 'RRR', 'AR', 'PR', 'TR', 'SR', 'MA', 'HR', 'UR', 'K', 'A', 'SAR', 'S', 'SSR', 'BWR', 'MUR'];
+  const existingRarities = new Set(rarityCards.map((c) => c.rarity).filter(Boolean));
   const sortedRarities = rarityOrder.filter((r) => existingRarities.has(r));
-  const unknownRarities = Array.from(existingRarities)
-    .filter((r) => !rarityOrder.includes(r as string))
-    .sort()
-    .map(String);
+  const unknownRarities = Array.from(existingRarities).filter((r) => !rarityOrder.includes(r as string)).sort().map(String);
   const rarities = ['Semua', ...sortedRarities, ...unknownRarities];
 
   return { expansions, illustrators, regulations, rarities };

@@ -15,7 +15,7 @@ const ratelimit = isRedisConfigured
     })
   : null;
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Apply rate limiting to all Server Action POST requests
@@ -70,18 +70,16 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(new URL('/', request.url));
     }
 
-    // Check admin status via user metadata (set via Supabase Dashboard or admin action)
+    // Check admin status via user app_metadata (set via Supabase Dashboard)
     const isAdmin = user.app_metadata?.role === 'admin';
     if (!isAdmin) {
       return NextResponse.redirect(new URL('/', request.url));
     }
   }
 
-  // Protect authenticated-only routes
-  const protectedRoutes = ['/collection', '/decks'];
-  const isProtectedRoute = protectedRoutes.some((route) =>
-    pathname.startsWith(route)
-  );
+  // Only /decks (dashboard) and /decks/build require authentication. 
+  // We allow /decks/[id] for public deck viewing via link sharing.
+  const isProtectedRoute = pathname === '/decks' || pathname.startsWith('/decks/build');
 
   if (isProtectedRoute && !user) {
     return NextResponse.redirect(new URL('/', request.url));
