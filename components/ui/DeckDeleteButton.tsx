@@ -26,11 +26,11 @@ export default function DeckDeleteButton({ deckId }: { deckId: string }) {
     <>
       <button
         onClick={() => setConfirmDelete(true)}
-        className="flex items-center gap-2 bg-red-500/10 text-red-500 hover:bg-red-500/20 px-5 py-2.5 rounded-xl text-sm transition-transform hover:scale-105"
+        className="flex items-center gap-2 bg-red-500/10 text-red-500 hover:bg-red-500/20 h-[42px] px-5 rounded-xl text-sm transition-all shadow-sm hover:scale-105 active:scale-95 duration-200"
         title="Hapus Deck"
       >
         <Trash2 size={16} />
-        <span className="hidden sm:inline">Hapus</span>
+        <span>Hapus</span>
       </button>
 
       {confirmDelete && (

@@ -4,6 +4,13 @@ export interface SetInfo {
   set_order: number;
 }
 
+export interface Attack {
+  name?: string;
+  cost?: string[];
+  damage?: string;
+  effect?: string;
+}
+
 export interface PokemonCard {
   id: number;
   name: string;
@@ -24,7 +31,7 @@ export interface PokemonCard {
   height?: string | null;
   weight?: string | null;
   description?: string | null;
-  attacks?: any[] | null;
+  attacks?: Attack[] | null;
   weakness?: { type: string; value: string } | null;
   resistance?: { type: string; value: string } | null;
   retreat_cost?: number;
@@ -50,7 +57,7 @@ export interface CardPayload {
   height?: string | null;
   weight?: string | null;
   description?: string | null;
-  attacks?: any[] | null;
+  attacks?: Attack[] | null;
   weakness?: { type: string; value: string } | null;
   resistance?: { type: string; value: string } | null;
   retreat_cost?: number;

@@ -7,7 +7,8 @@ import { ChevronLeft, Plus, Minus, Heart, Bookmark, Info } from "lucide-react";
 import ZoomableImage from "@/components/ui/ZoomableImage";
 import { createClient } from "@/utils/supabase/client";
 import { updateCollectionAction } from "@/app/actions/collections";
-import { PokemonCard as PokemonCardType } from "@/types";
+import { PokemonCard as PokemonCardType, Attack } from "@/types";
+import { getStageLabel } from "@/lib/card-helpers";
 
 interface CollectionData {
   quantity: number;
@@ -26,16 +27,22 @@ export default function CardDetailView({ initialCards }: { initialCards: Pokemon
   const searchParams = useSearchParams();
   const fromSource = searchParams.get("from");
   const variantParam = searchParams.get("variant");
+  const uid = searchParams.get("uid");
+  const nParam = searchParams.get("n");
 
   let backUrl = "/";
   let backText = "Kembali ke Library";
 
-  if (fromSource === "collection") {
-    backUrl = "/collection";
-    backText = "Kembali ke Koleksi";
-  } else if (fromSource === "wishlist") {
-    backUrl = "/collection";
-    backText = "Kembali ke Wishlist";
+  if (fromSource === "collection" || fromSource === "wishlist") {
+    let qs = "";
+    if (uid) qs += `?uid=${uid}`;
+    if (nParam) qs += (qs ? "&" : "?") + `n=${encodeURIComponent(nParam)}`;
+    
+    // Always append the origin tab parameter so the UI loads exactly what they were looking at
+    qs += (qs ? "&" : "?") + `tab=${fromSource}`;
+    
+    backUrl = `/collection${qs}`;
+    backText = fromSource === "collection" ? "Kembali ke Koleksi" : "Kembali ke Wishlist";
   }
 
   const [supabase] = useState(() => createClient());
@@ -155,42 +162,7 @@ export default function CardDetailView({ initialCards }: { initialCards: Pokemon
     updateDatabase(card.id, { ...currentData, is_wishlist: !currentData.is_wishlist }, "wishlist");
   };
 
-  const cardStage = (() => {
-    const nameUpper = (card.name || "").toUpperCase();
-    const stageRaw = (card.stage || "").trim();
-    const stageLower = stageRaw.toLowerCase();
-    
-    let base = "Lainnya";
-
-    if (stageLower.includes("basic") || stageLower === "basic") {
-      base = "Basic";
-    } else if (stageLower.includes("stage 1")) {
-      base = "Stage 1";
-    } else if (stageLower.includes("stage 2")) {
-      base = "Stage 2";
-    } else if (stageRaw) {
-      base = stageRaw;
-    }
-
-    if (nameUpper.includes("VMAX")) return "VMAX";
-    if (nameUpper.includes("VSTAR")) return "VSTAR";
-
-    let suffix = "";
-    
-    if (nameUpper.endsWith(" EX") || nameUpper.includes(" EX ")) {
-      suffix = "EX";
-    } else if (nameUpper.includes("GX")) {
-      suffix = "GX";
-    } else if (nameUpper.endsWith(" V") || nameUpper.includes(" V ")) {
-      suffix = "V";
-    }
-
-    if (suffix && (base === "Basic" || base === "Stage 1" || base === "Stage 2")) {
-      return `${base} ${suffix}`;
-    }
-    
-    return base;
-  })();
+  const cardStage = getStageLabel(card);
 
   const currentCollection = collectionMap[card.id] || { quantity: 0, is_wishlist: false };
 
@@ -203,8 +175,8 @@ export default function CardDetailView({ initialCards }: { initialCards: Pokemon
         </div>
       )}
       <div className="mb-6">
-        <Link href={backUrl} className="inline-flex items-center gap-2 text-sm text-foreground/50 hover:text-foreground transition-colors w-fit">
-          <ChevronLeft size={16} /> {backText}
+        <Link href={backUrl} className="inline-flex items-center gap-2 text-sm font-medium text-foreground/60 hover:text-foreground transition-colors w-fit cursor-pointer">
+          <ChevronLeft size={18} /> {backText}
         </Link>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-14 items-start w-full">
@@ -225,7 +197,7 @@ export default function CardDetailView({ initialCards }: { initialCards: Pokemon
           </div>
           <div className="w-full max-w-[380px] lg:max-w-full flex gap-3">
             <div className="flex-1 flex items-center justify-between bg-muted/30 border border-border/60 rounded-xl p-1.5">
-              <button onClick={() => handleQuantityChange(-1)} disabled={isQuantityLoading || currentCollection.quantity === 0} className="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-background border border-transparent hover:border-border/60 transition-all disabled:opacity-30">
+              <button onClick={() => handleQuantityChange(-1)} disabled={isQuantityLoading || currentCollection.quantity === 0} className="w-10 h-10 flex items-center justify-center rounded-lg bg-background border border-border/60 hover:border-foreground/40 hover:bg-muted/30 text-foreground transition-all disabled:opacity-50">
                 <Minus size={18} />
               </button>
               <div className="flex flex-col items-center justify-center w-20">
@@ -240,7 +212,7 @@ export default function CardDetailView({ initialCards }: { initialCards: Pokemon
                   className="w-full text-center  text-xl leading-none bg-transparent border-none outline-none focus:ring-2 focus:ring-foreground/20 rounded-md [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none transition-all"
                 />
               </div>
-              <button onClick={() => handleQuantityChange(1)} disabled={isQuantityLoading} className="w-10 h-10 flex items-center justify-center rounded-lg bg-foreground text-background hover:scale-105 transition-all disabled:opacity-50">
+              <button onClick={() => handleQuantityChange(1)} disabled={isQuantityLoading} className="w-10 h-10 flex items-center justify-center rounded-lg bg-background border border-border/60 hover:border-foreground/40 hover:bg-muted/30 text-foreground transition-all disabled:opacity-50">
                 <Plus size={18} />
               </button>
             </div>
@@ -251,11 +223,11 @@ export default function CardDetailView({ initialCards }: { initialCards: Pokemon
         </div>
         <div className="lg:col-span-8 flex flex-col gap-6 w-full">
           <div className="flex flex-col gap-1">
-            <h1 className="text-3xl md:text-4xl  tracking-tight">{card.name}</h1>
+            <h1 className="text-3xl md:text-4xl font-bold tracking-tight">{card.name}</h1>
             <div className="flex flex-wrap items-center gap-2 mt-1">
-              <span className="text-xs  text-foreground/50 uppercase tracking-widest">{cardStage}</span>
+              <span className="text-xs text-foreground/50 uppercase tracking-widest leading-none">{cardStage}</span>
               {card.evolution && card.evolution.length > 0 && (
-                <><span className="text-foreground/30 px-1">•</span><span className="text-xs  text-foreground/60">Evolusi: {card.evolution.join(" → ")}</span></>
+                <><span className="text-foreground/30 px-1 -translate-y-[1px] leading-none">•</span><span className="text-xs text-foreground/60 leading-none">Evolusi: {card.evolution.join(" → ")}</span></>
               )}
             </div>
             {initialCards.length > 1 && (
@@ -327,12 +299,12 @@ export default function CardDetailView({ initialCards }: { initialCards: Pokemon
                 {card.weight && <span>Berat: {card.weight.replace(/kg/ig, '').trim()} kg</span>}
               </div>
             )}
-            {card.description && <p className="text-foreground/70 leading-relaxed italic text-sm mt-1">"{card.description}"</p>}
+            {card.description && <p className="text-foreground/70 leading-relaxed italic text-sm mt-4">"{card.description}"</p>}
           </div>
           <hr className="border-border/60" />
           {card.attacks && card.attacks.length > 0 && (
             <div className="flex flex-col gap-3">
-              {card.attacks.map((attack: any, index: number) => {
+              {card.attacks.map((attack: Attack, index: number) => {
                 const validCost = attack.cost && attack.cost.length > 0;
                 const validName = attack.name && attack.name.trim() !== "";
                 const validDamage = attack.damage && attack.damage.trim() !== "";
@@ -346,14 +318,14 @@ export default function CardDetailView({ initialCards }: { initialCards: Pokemon
                         <div className="flex items-center gap-4 flex-wrap">
                           {validCost && (
                             <div className="flex items-center gap-1">
-                              {attack.cost.map((costImg: string, i: number) => (
+                              {attack.cost?.map((costImg: string, i: number) => (
                                 <img key={i} src={costImg} alt="Cost" className="object-contain drop-shadow-sm w-6 h-6" />
                               ))}
                             </div>
                           )}
-                          {validName && <span className=" text-lg">{attack.name}</span>}
+                          {validName && <span className="font-bold text-lg">{attack.name}</span>}
                         </div>
-                        {validDamage && <span className=" text-xl whitespace-nowrap">{attack.damage}</span>}
+                        {validDamage && <span className="font-bold text-xl whitespace-nowrap">{attack.damage}</span>}
                       </div>
                     )}
                     {validEffect && <p className="text-sm text-foreground/70 leading-relaxed">{attack.effect}</p>}
@@ -365,55 +337,55 @@ export default function CardDetailView({ initialCards }: { initialCards: Pokemon
           {Number(card.hp) > 0 && (
             <div className="grid grid-cols-3 gap-px bg-border/60 border border-border/60 rounded-[20px] overflow-hidden">
               <div className="flex flex-col items-center justify-center p-4 gap-1.5 bg-background">
-                <span className="text-foreground/40 text-[10px]  uppercase tracking-widest">Kelemahan</span>
+                <span className="text-foreground/40 text-[10px] font-bold uppercase tracking-widest">Kelemahan</span>
                 <div className="flex items-center gap-1.5  text-sm">
                   {card.weakness?.type ? (
-                    <><img src={card.weakness.type} alt="Weakness" className="w-[18px] h-[18px]" /><span>{card.weakness.value}</span></>
-                  ) : (<span className="text-foreground/30">--</span>)}
+                    <><img src={card.weakness.type} alt="Weakness" className="w-[18px] h-[18px]" /><span className="font-bold">{card.weakness.value}</span></>
+                  ) : (<span className="text-foreground/30 font-bold">--</span>)}
                 </div>
               </div>
               <div className="flex flex-col items-center justify-center p-4 gap-1.5 bg-background">
-                <span className="text-foreground/40 text-[10px]  uppercase tracking-widest">Resistansi</span>
+                <span className="text-foreground/40 text-[10px] font-bold uppercase tracking-widest">Resistansi</span>
                 <div className="flex items-center gap-1.5  text-sm">
                   {card.resistance?.type ? (
-                    <><img src={card.resistance.type} alt="Resistance" className="w-[18px] h-[18px]" /><span>{card.resistance.value}</span></>
-                  ) : (<span className="text-foreground/30">--</span>)}
+                    <><img src={card.resistance.type} alt="Resistance" className="w-[18px] h-[18px]" /><span className="font-bold">{card.resistance.value}</span></>
+                  ) : (<span className="text-foreground/30 font-bold">--</span>)}
                 </div>
               </div>
               <div className="flex flex-col items-center justify-center p-4 gap-1.5 bg-background">
-                <span className="text-foreground/40 text-[10px]  uppercase tracking-widest">Mundur</span>
+                <span className="text-foreground/40 text-[10px] font-bold uppercase tracking-widest">Mundur</span>
                 <div className="flex items-center gap-1">
                   {(card.retreat_cost ?? 0) > 0 ? (
                     Array.from({ length: card.retreat_cost as number }).map((_, i) => (
                       <img key={i} src="https://asia.pokemon-card.com/various_images/energy/Colorless.png" alt="Retreat" className="w-[18px] h-[18px]" />
                     ))
-                  ) : (<span className="text-foreground/30">--</span>)}
+                  ) : (<span className="text-foreground/30 font-bold">--</span>)}
                 </div>
               </div>
             </div>
           )}
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-px bg-border/60 border border-border/60 rounded-[20px] text-center overflow-hidden">
             <div className="flex flex-col p-3 md:p-4 gap-1 justify-center items-center bg-background col-span-2 sm:col-span-1">
-              <span className="text-foreground/40 text-[9px]  uppercase tracking-widest">Ilustrator</span>
-              <span className=" text-[11px] text-center break-words">{card.illustrator || "--"}</span>
+              <span className="text-foreground/40 text-[9px] font-bold uppercase tracking-widest">Ilustrator</span>
+              <span className="font-bold text-[11px] text-center break-words">{card.illustrator || "--"}</span>
             </div>
             <div className="flex flex-col p-3 md:p-4 gap-1 justify-center items-center bg-background">
-              <span className="text-foreground/40 text-[9px]  uppercase tracking-widest">Ekspansi</span>
-              {card.expansion_symbol_url ? (
-                <img src={card.expansion_symbol_url} alt="Symbol" className="h-4 w-auto object-contain drop-shadow-sm" />
-              ) : (<span className="text-foreground/30 text-[11px] ">--</span>)}
+              <span className="text-foreground/40 text-[9px] font-bold uppercase tracking-widest">Ekspansi</span>
+              {card.sets?.code ? (
+                <span className="font-bold text-[11px] text-center break-words">{card.sets.code}</span>
+              ) : (<span className="text-foreground/30 font-bold text-[11px] ">--</span>)}
             </div>
             <div className="flex flex-col p-3 md:p-4 gap-1 justify-center items-center bg-background">
-              <span className="text-foreground/40 text-[9px]  uppercase tracking-widest">Regulasi</span>
-              <span className=" text-[11px]">{card.regulation_mark || "--"}</span>
+              <span className="text-foreground/40 text-[9px] font-bold uppercase tracking-widest">Regulasi</span>
+              <span className="font-bold text-[11px]">{card.regulation_mark || "--"}</span>
             </div>
             <div className="flex flex-col p-3 md:p-4 gap-1 justify-center items-center bg-background">
-              <span className="text-foreground/40 text-[9px]  uppercase tracking-widest">No. Kartu</span>
-              <span className=" text-[11px]">{card.card_number || "--"}</span>
+              <span className="text-foreground/40 text-[9px] font-bold uppercase tracking-widest">No. Kartu</span>
+              <span className="font-bold text-[11px]">{card.card_number || "--"}</span>
             </div>
             <div className="flex flex-col p-3 md:p-4 gap-1 justify-center items-center bg-background">
-              <span className="text-foreground/40 text-[9px]  uppercase tracking-widest">Rarity</span>
-              <span className=" text-[11px]">{card.rarity || "--"}</span>
+              <span className="text-foreground/40 text-[9px] font-bold uppercase tracking-widest">Rarity</span>
+              <span className="font-bold text-[11px]">{card.rarity || "--"}</span>
             </div>
           </div>
         </div>

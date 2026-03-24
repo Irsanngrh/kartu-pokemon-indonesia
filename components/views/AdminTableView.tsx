@@ -38,27 +38,27 @@ export default function AdminTableView({ initialCards, availableSets }: { initia
 
   const filteredCards = useMemo(() => {
     let filtered = cards;
-    
+
     if (searchQuery) {
       const lower = searchQuery.toLowerCase();
-      filtered = filtered.filter((c) => 
+      filtered = filtered.filter((c) =>
         c.name?.toLowerCase().includes(lower) || c.card_number?.toLowerCase().includes(lower)
       );
     }
-    
+
     if (expansionFilter !== "Semua") {
       filtered = filtered.filter(c => c.sets && `${c.sets.name} (${c.sets.code})` === expansionFilter);
     }
-    
+
     return filtered.sort((a, b) => {
       const orderSetA = a.sets?.set_order || 99;
       const orderSetB = b.sets?.set_order || 99;
       if (orderSetA !== orderSetB) return orderSetA - orderSetB;
-      
+
       const numA = parseInt((a.card_number || "0").replace(/\D/g, "")) || 0;
       const numB = parseInt((b.card_number || "0").replace(/\D/g, "")) || 0;
       if (numA !== numB) return numA - numB;
-      
+
       const orderA = a.variant_order || 1;
       const orderB = b.variant_order || 1;
       if (orderA !== orderB) return orderA - orderB;
@@ -104,21 +104,21 @@ export default function AdminTableView({ initialCards, availableSets }: { initia
       setEditingId(null);
       setFormData({
         set_id: availableSets[0]?.id || "",
-        name: "", 
-        card_number: "", 
-        variant_name: "", 
-        variant_order: 1, 
-        hp: "", 
-        stage: "", 
+        name: "",
+        card_number: "",
+        variant_name: "",
+        variant_order: 1,
+        hp: "",
+        stage: "",
         rarity: "",
-        illustrator: "", 
-        image_url: "", 
-        expansion_symbol_url: "", 
+        illustrator: "",
+        image_url: "",
+        expansion_symbol_url: "",
         description: "",
-        attacks: "", 
-        types: "", 
-        evolution: "", 
-        weakness: "", 
+        attacks: "",
+        types: "",
+        evolution: "",
+        weakness: "",
         resistance: ""
       });
     }
@@ -137,13 +137,13 @@ export default function AdminTableView({ initialCards, availableSets }: { initia
 
   const handleSave = async () => {
     setIsSaving(true);
-    
+
     const parseJson = (val: string, fieldName: string) => {
       if (!val || val.trim() === "") return null;
-      try { 
-        return JSON.parse(val); 
-      } catch (e) { 
-        throw new Error(`Format JSON pada kolom ${fieldName} tidak valid.`); 
+      try {
+        return JSON.parse(val);
+      } catch (e) {
+        throw new Error(`Format JSON pada kolom ${fieldName} tidak valid.`);
       }
     };
 
@@ -171,16 +171,16 @@ export default function AdminTableView({ initialCards, availableSets }: { initia
       if (editingId) {
         const { data: updatedData, error } = await updateCardAction(editingId as any, payload);
         if (error) throw new Error(error);
-        
-        setCards(cards.map(c => 
-          c.id === editingId 
-            ? { ...c, ...payload, sets: availableSets.find(s => s.id === payload.set_id) } 
+
+        setCards(cards.map(c =>
+          c.id === editingId
+            ? { ...c, ...payload, sets: availableSets.find(s => s.id === payload.set_id) }
             : c
         ));
       } else {
         const { data, error } = await addCardAction(payload);
         if (error) throw new Error(error);
-        
+
         setCards([...cards, data]);
       }
       closeModal();
@@ -193,10 +193,10 @@ export default function AdminTableView({ initialCards, availableSets }: { initia
 
   const handleDelete = async () => {
     if (!editingId || !confirm("Yakin ingin menghapus kartu ini selamanya?")) return;
-    
+
     setIsSaving(true);
     const { error } = await deleteCardAction(editingId as any);
-    
+
     if (!error) {
       setCards(cards.filter(c => c.id !== editingId));
       closeModal();
@@ -214,8 +214,8 @@ export default function AdminTableView({ initialCards, availableSets }: { initia
             <span className="text-[10px]  uppercase tracking-widest text-foreground/50 ml-1">Pencarian</span>
             <div className="relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-foreground/40" size={18} />
-              <input 
-                type="text" placeholder="Cari nama atau nomor..." 
+              <input
+                type="text" placeholder="Cari nama atau nomor kartu Pokémon..."
                 value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-11 pr-4 h-[40px] bg-background border border-border/60 rounded-xl focus:outline-none focus:border-foreground/30 text-sm  shadow-sm"
               />
@@ -275,8 +275,8 @@ export default function AdminTableView({ initialCards, availableSets }: { initia
                     </span>
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <button 
-                      onClick={() => openModal(card)} 
+                    <button
+                      onClick={() => openModal(card)}
                       disabled={fetchingId === card.id}
                       className="p-2 bg-muted/60 text-foreground/80 hover:text-foreground hover:bg-muted border border-border/50 rounded-lg transition-colors inline-flex disabled:opacity-50"
                     >
@@ -353,18 +353,32 @@ export default function AdminTableView({ initialCards, availableSets }: { initia
                 </div>
               </div>
             </div>
-            <div className="px-6 py-4 border-t border-border flex items-center justify-between bg-muted/20">
+            <div className="px-6 py-4 border-t border-border flex flex-col sm:flex-row items-stretch sm:items-center justify-between bg-muted/20 gap-3">
+              <button
+                onClick={handleSave}
+                disabled={isSaving}
+                className="justify-center h-[42px] px-6 bg-foreground text-background text-sm rounded-xl flex items-center gap-2 hover:scale-105 active:scale-95 transition-all shadow-sm disabled:opacity-50 order-1 sm:order-3"
+              >
+                <Save size={16} /> {isSaving ? "Menyimpan..." : "Simpan Data"}
+              </button>
+
+              <button
+                onClick={closeModal}
+                disabled={isSaving}
+                className="justify-center h-[42px] px-4 bg-background border border-border/60 hover:border-foreground/40 text-foreground/70 hover:text-foreground hover:bg-muted/30 text-sm rounded-xl flex items-center gap-2 transition-all shadow-sm active:scale-95 order-2 sm:order-2"
+              >
+                Batal
+              </button>
+
               {editingId ? (
-                <button onClick={handleDelete} disabled={isSaving} className="px-4 py-2 bg-red-500/10 text-red-600  text-sm rounded-xl flex items-center gap-2 hover:bg-red-500/20 transition-colors">
+                <button
+                  onClick={handleDelete}
+                  disabled={isSaving}
+                  className="justify-center h-[42px] px-4 bg-red-500/10 text-red-600 text-sm rounded-xl flex items-center gap-2 hover:bg-red-500/20 active:scale-95 transition-all shadow-sm order-3 sm:order-1 sm:mr-auto"
+                >
                   <Trash2 size={16} /> Hapus
                 </button>
-              ) : <div></div>}
-              <div className="flex items-center gap-3">
-                <button onClick={closeModal} disabled={isSaving} className="px-4 py-2  text-sm text-foreground/60 hover:text-foreground">Batal</button>
-                <button onClick={handleSave} disabled={isSaving} className="px-6 py-2.5 bg-foreground text-background  text-sm rounded-xl flex items-center gap-2 hover:scale-105 transition-transform disabled:opacity-50">
-                  <Save size={16} /> {isSaving ? "Menyimpan..." : "Simpan Data"}
-                </button>
-              </div>
+              ) : <div className="hidden sm:block order-3 sm:order-1 sm:mr-auto"></div>}
             </div>
           </div>
         </div>

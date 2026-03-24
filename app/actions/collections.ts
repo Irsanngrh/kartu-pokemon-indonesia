@@ -22,17 +22,17 @@ export async function updateCollectionAction(cardId: string | number, quantity: 
     }
   } else {
     if (existing) {
-      const { error } = await supabase.from("user_collections").update({ 
-        quantity: quantity, 
-        is_wishlist: isWishlist 
+      const { error } = await supabase.from("user_collections").update({
+        quantity,
+        is_wishlist: isWishlist,
       }).eq("id", existing.id);
       if (error) return { error: error.message };
     } else {
-      const { error } = await supabase.from("user_collections").insert({ 
-        user_id: user.id, 
-        card_id: cardId, 
-        quantity: quantity, 
-        is_wishlist: isWishlist 
+      const { error } = await supabase.from("user_collections").insert({
+        user_id: user.id,
+        card_id: cardId,
+        quantity,
+        is_wishlist: isWishlist,
       });
       if (error) return { error: error.message };
     }

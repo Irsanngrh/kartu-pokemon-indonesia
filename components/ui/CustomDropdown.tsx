@@ -15,6 +15,23 @@ interface CustomDropdownProps {
 export default function CustomDropdown({ label, options, value, onChange, disabled, disabledText }: CustomDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const activeItemRef = useRef<HTMLButtonElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  // Scroll the dropdown list container to center the active item (without moving the page)
+  useEffect(() => {
+    if (isOpen && activeItemRef.current && listRef.current) {
+      requestAnimationFrame(() => {
+        const container = listRef.current;
+        const item = activeItemRef.current;
+        if (!container || !item) return;
+        const itemTop = item.offsetTop;
+        const itemHeight = item.offsetHeight;
+        const containerHeight = container.clientHeight;
+        container.scrollTop = itemTop - containerHeight / 2 + itemHeight / 2;
+      });
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -28,14 +45,14 @@ export default function CustomDropdown({ label, options, value, onChange, disabl
 
   return (
     <div className="relative flex flex-col gap-1.5 w-full" ref={dropdownRef}>
-      <span className="text-[10px]  uppercase tracking-widest text-foreground/50 ml-1">
+      <span className="text-[10px] font-bold uppercase tracking-widest text-foreground/50 ml-1">
         {label}
       </span>
       
       <button
         type="button"
         onClick={() => !disabled && setIsOpen(!isOpen)}
-        className={`flex items-start justify-between w-full px-4 py-2.5 bg-background border rounded-xl text-sm  transition-all shadow-sm ${
+        className={`flex items-center justify-between w-full h-[42px] px-4 bg-background border rounded-xl text-sm transition-all duration-200 shadow-sm ${
           disabled 
             ? "border-border/30 bg-muted/20 text-foreground/30 cursor-not-allowed" 
             : isOpen 
@@ -49,10 +66,11 @@ export default function CustomDropdown({ label, options, value, onChange, disabl
 
       {isOpen && !disabled && (
         <div className="absolute top-full left-0 right-0 mt-2 bg-background border border-border/60 rounded-xl shadow-xl z-50 overflow-hidden flex flex-col max-h-[250px]">
-          <div className="overflow-y-auto p-1 flex flex-col gap-0.5 custom-scrollbar">
+          <div ref={listRef} className="overflow-y-auto p-1 flex flex-col gap-0.5 custom-scrollbar">
             {options.map((option) => (
               <button
                 key={option}
+                ref={value === option ? activeItemRef : null}
                 type="button"
                 onClick={() => {
                   onChange(option);

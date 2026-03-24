@@ -77,9 +77,10 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  // Only /decks (dashboard) and /decks/build require authentication. 
-  // We allow /decks/[id] for public deck viewing via link sharing.
-  const isProtectedRoute = pathname === '/decks' || pathname.startsWith('/decks/build');
+  // Only /decks/build requires authentication.
+  // /decks (dashboard) is accessible to all, showing a login prompt for unauthenticated users.
+  // /decks/[id] is public for deck sharing.
+  const isProtectedRoute = pathname.startsWith('/decks/build');
 
   if (isProtectedRoute && !user) {
     return NextResponse.redirect(new URL('/', request.url));

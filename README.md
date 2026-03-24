@@ -13,7 +13,7 @@ Database kartu Pokémon TCG versi bahasa Indonesia yang lengkap. Pengguna dapat 
 | **Koleksi** | Catat jumlah kartu yang dimiliki dan bagikan koleksi lewat link unik |
 | **Wishlist** | Tandai kartu yang ingin didapatkan |
 | **Deck Builder** | Rakit deck hingga 60 kartu dengan aturan TCG (maks 4 salinan per nama) |
-| **Manajemen Deck** | Simpan, edit, dan hapus deck |
+| **Manajemen Deck** | Simpan, edit, hapus, dan bagikan deck lewat link publik |
 | **Admin Panel** | Tambah, ubah, dan hapus data kartu (khusus admin) |
 
 ---
@@ -22,14 +22,28 @@ Database kartu Pokémon TCG versi bahasa Indonesia yang lengkap. Pengguna dapat 
 
 | Layer | Teknologi |
 |-------|-----------|
-| Frontend | [Next.js 16](https://nextjs.org/) (App Router) |
+| Frontend | [Next.js 16](https://nextjs.org/) (App Router, Turbopack) |
 | Styling | [Tailwind CSS v4](https://tailwindcss.com/) |
-| Database | [Supabase](https://supabase.com/) (PostgreSQL) |
+| Database | [Supabase](https://supabase.com/) (PostgreSQL + RLS) |
 | Autentikasi | Google OAuth via Supabase Auth |
-| Caching | [Upstash Redis](https://upstash.com/) |
-| Rate Limiting | Upstash Ratelimit |
+| Caching | [Upstash Redis](https://upstash.com/) + in-memory fallback |
+| Rate Limiting | Upstash Ratelimit (Server Actions) |
 | Monitoring | [Sentry](https://sentry.io/) |
 | Deployment | [Vercel](https://vercel.com/) |
+
+---
+
+## Security
+
+| Proteksi | Detail |
+|----------|--------|
+| **CSP** | Content-Security-Policy header membatasi sumber script, gambar, dan koneksi |
+| **RLS** | Row Level Security di PostgreSQL memastikan ownership data di level database |
+| **Auth Guard** | Proxy middleware memvalidasi autentikasi untuk route yang dilindungi |
+| **Admin Role** | Admin diverifikasi via `app_metadata.role` secara konsisten di seluruh stack |
+| **Rate Limiting** | Server Actions dibatasi 20 request / 10 detik per IP |
+| **Security Headers** | HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy |
+| **Open Redirect Prevention** | Parameter `next` di auth callback divalidasi untuk mencegah redirect eksternal |
 
 ---
 
@@ -78,7 +92,7 @@ UPSTASH_REDIS_REST_URL=https://xxxx.upstash.io
 UPSTASH_REDIS_REST_TOKEN=AXxx...
 
 # Sentry (opsional — digunakan untuk monitoring error)
-SENTRY_DSN=https://xxxx@sentry.io/xxxx
+NEXT_PUBLIC_SENTRY_DSN=https://xxxx@sentry.io/xxxx
 SENTRY_ORG=nama-org
 SENTRY_PROJECT=nama-project
 ```
@@ -160,24 +174,49 @@ CREATE INDEX ON user_decks(user_id);
 ```
 
 ### 3. Row Level Security (RLS)
+Jalankan file `scripts/rls-policies.sql` di SQL Editor, atau salin perintah berikut:
+
 ```sql
--- Aktifkan RLS
+-- Aktifkan RLS untuk semua tabel
+ALTER TABLE cards ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_collections ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_decks ENABLE ROW LEVEL SECURITY;
 
--- Policy koleksi
-CREATE POLICY "Users manage own collection"
-  ON user_collections FOR ALL
+-- Kartu & set: semua bisa baca, hanya admin yang bisa tulis
+CREATE POLICY "Public read cards" ON cards FOR SELECT USING (true);
+CREATE POLICY "Admins insert cards" ON cards FOR INSERT
+  WITH CHECK ((SELECT (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'));
+CREATE POLICY "Admins update cards" ON cards FOR UPDATE
+  USING ((SELECT (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'));
+CREATE POLICY "Admins delete cards" ON cards FOR DELETE
+  USING ((SELECT (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'));
+
+CREATE POLICY "Public read sets" ON sets FOR SELECT USING (true);
+CREATE POLICY "Admins manage sets" ON sets FOR ALL
+  USING ((SELECT (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'));
+
+-- Koleksi: publik bisa baca (sharing via link), hanya pemilik yang bisa tulis
+CREATE POLICY "Public read collections" ON user_collections FOR SELECT USING (true);
+CREATE POLICY "Users insert own collections" ON user_collections FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users update own collections" ON user_collections FOR UPDATE
+  USING (auth.uid() = user_id);
+CREATE POLICY "Users delete own collections" ON user_collections FOR DELETE
   USING (auth.uid() = user_id);
 
--- Policy deck
-CREATE POLICY "Users manage own decks"
-  ON user_decks FOR ALL
+-- Deck: publik bisa baca (sharing via link), hanya pemilik yang bisa tulis
+CREATE POLICY "Public read decks" ON user_decks FOR SELECT USING (true);
+CREATE POLICY "Users insert own decks" ON user_decks FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users update own decks" ON user_decks FOR UPDATE
+  USING (auth.uid() = user_id);
+CREATE POLICY "Users delete own decks" ON user_decks FOR DELETE
   USING (auth.uid() = user_id);
 ```
 
 ### 4. Setup Admin Role
-Untuk memberikan akses admin, jalankan di **Supabase Authentication → User Management** atau via SQL:
+Untuk memberikan akses admin, jalankan di **Supabase SQL Editor**:
 
 ```sql
 -- Ganti 'USER_ID_HERE' dengan UUID user yang menjadi admin
@@ -209,22 +248,29 @@ Atau hubungkan repositori GitHub ke Vercel Dashboard dan tambahkan **Environment
 ```
 app/
 ├── actions/          # Server Actions (data layer)
-│   ├── cards.fetch.ts
-│   ├── cards.ts
-│   ├── collections.ts
-│   └── decks.ts
-├── admin/            # Panel admin
+│   ├── cards.fetch.ts    # Fetching & filtering kartu dengan caching
+│   ├── cards.ts          # CRUD kartu (admin-only)
+│   ├── collections.ts    # Manajemen koleksi pengguna
+│   └── decks.ts          # CRUD deck pengguna
+├── admin/            # Panel admin (dilindungi RLS + role check)
+├── auth/callback/    # OAuth callback handler
 ├── [set_code]/       # Halaman detail kartu
 ├── collection/       # Halaman koleksi pengguna
-├── decks/            # Deck builder
+├── decks/            # Deck dashboard & builder
 └── layout.tsx        # Root layout
 
 components/
-├── ui/               # Komponen reusable kecil
-└── views/            # Komponen halaman besar
+├── ui/               # Komponen reusable (Navbar, Dropdown, PokemonCard, dll)
+└── views/            # Komponen halaman besar (LibraryView, CardDetailView, dll)
 
 lib/
-└── constants.ts      # Konstanta aplikasi
+├── card-helpers.ts   # Helper klasifikasi kartu (stage, elemen, tipe)
+└── constants.ts      # Konstanta aplikasi (limit, cache key, dll)
+
+scripts/
+├── rls-policies.sql  # SQL migrasi RLS untuk Supabase
+├── scrape.js         # Script scraping data kartu (dev-only)
+└── seed.js           # Script seeding database (dev-only)
 
 types/
 └── index.ts          # Definisi tipe TypeScript
@@ -232,5 +278,5 @@ types/
 utils/
 └── supabase/         # Supabase client (server & client side)
 
-middleware.ts          # Auth protection & rate limiting
+proxy.ts              # Middleware: auth guard, rate limiting, session refresh
 ```

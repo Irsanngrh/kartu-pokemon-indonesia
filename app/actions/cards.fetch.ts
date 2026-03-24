@@ -3,6 +3,7 @@
 import { createClient } from '@/utils/supabase/server';
 import { PokemonCard } from '@/types';
 import { Redis } from '@upstash/redis';
+import { getCardType, getElements, getStageInfo } from '@/lib/card-helpers';
 import {
   CACHE_TTL_MS,
   CACHE_KEY_ALL_CARDS,
@@ -20,17 +21,15 @@ export interface FilterParams {
   rarityFilter?: string;
 }
 
-// Upstash Redis persistent cache (shared across serverless invocations)
 const isRedisConfigured =
   process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN;
 const redis = isRedisConfigured ? Redis.fromEnv() : null;
 
-// Module-level fallback cache for environments without Redis
+
 let inMemoryCache: PokemonCard[] | null = null;
 let inMemoryCacheTime = 0;
 
 async function getAllCardsForFiltering(): Promise<PokemonCard[]> {
-  // 1. Try Redis cache
   if (redis) {
     try {
       const cached = await redis.get<PokemonCard[]>(CACHE_KEY_ALL_CARDS);
@@ -40,13 +39,11 @@ async function getAllCardsForFiltering(): Promise<PokemonCard[]> {
     }
   }
 
-  // 2. Try in-memory cache (cold start within same invocation)
   const now = Date.now();
   if (inMemoryCache && now - inMemoryCacheTime < CACHE_TTL_MS) {
     return inMemoryCache;
   }
 
-  // 3. Fetch from Supabase
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('cards')
@@ -55,14 +52,10 @@ async function getAllCardsForFiltering(): Promise<PokemonCard[]> {
     )
     .order('id');
 
-  if (error) {
-    console.error('[cards.fetch] getAllCardsForFiltering error:', error.message);
-    return [];
-  }
+  if (error) return [];
 
   const cards = (data as unknown as PokemonCard[]) ?? [];
 
-  // Store in Redis with 1-hour TTL
   if (redis && cards.length > 0) {
     try {
       await redis.set(CACHE_KEY_ALL_CARDS, cards, { ex: 3600 });
@@ -169,7 +162,6 @@ export async function fetchCardsBasedOnFilters(
     return { cards: paginated, hasMore: from + limit < totalCount, totalCount };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error';
-    console.error('[cards.fetch] fetchCardsBasedOnFilters error:', message);
     return { cards: [], hasMore: false, totalCount: 0, error: message };
   }
 }
@@ -264,61 +256,4 @@ export async function fetchFilterOptions(filters: FilterParams) {
   const rarities = ['Semua', ...sortedRarities, ...unknownRarities];
 
   return { expansions, illustrators, regulations, rarities };
-}
-
-// --- Internal helpers ---
-
-function getCardType(card: PokemonCard): string {
-  if (card.hp) return 'Pokémon';
-  const stage = (card.stage ?? '').toLowerCase();
-  if (stage.includes('supporter')) return 'Supporter';
-  if (stage.includes('stadium')) return 'Stadium';
-  if (stage.includes('tool')) return 'Pokémon Tool';
-  if (stage.includes('item')) return 'Item';
-  if (stage.includes('energy') || stage.includes('energi')) return 'Energy';
-  return 'Lainnya';
-}
-
-function getElements(card: PokemonCard): string[] {
-  if (!card.types) return [];
-  return card.types.map((url: string) => {
-    const u = url.toLowerCase();
-    if (u.includes('grass')) return 'Rumput';
-    if (u.includes('fire')) return 'Api';
-    if (u.includes('water')) return 'Air';
-    if (u.includes('lightning')) return 'Listrik';
-    if (u.includes('psychic')) return 'Psikis';
-    if (u.includes('fighting')) return 'Petarung';
-    if (u.includes('darkness') || u.includes('dark')) return 'Kegelapan';
-    if (u.includes('metal')) return 'Baja';
-    if (u.includes('fairy')) return 'Peri';
-    if (u.includes('dragon')) return 'Naga';
-    if (u.includes('colorless')) return 'Normal';
-    return 'Lainnya';
-  });
-}
-
-function getStageInfo(card: PokemonCard): string[] {
-  const nameUpper = (card.name ?? '').toUpperCase();
-  const stageRaw = (card.stage ?? '').trim();
-  const stageLower = stageRaw.toLowerCase();
-
-  let base = 'Lainnya';
-  if (stageLower.includes('basic') || stageLower === 'basic') base = 'Basic';
-  else if (stageLower.includes('stage 1')) base = 'Stage 1';
-  else if (stageLower.includes('stage 2')) base = 'Stage 2';
-  else if (stageRaw) base = stageRaw;
-
-  if (nameUpper.includes('VMAX')) return ['VMAX'];
-  if (nameUpper.includes('VSTAR')) return ['VSTAR'];
-
-  let suffix = '';
-  if (nameUpper.endsWith(' EX') || nameUpper.includes(' EX ')) suffix = 'EX';
-  else if (nameUpper.includes('GX')) suffix = 'GX';
-  else if (nameUpper.endsWith(' V') || nameUpper.includes(' V ')) suffix = 'V';
-
-  if (suffix && ['Basic', 'Stage 1', 'Stage 2'].includes(base)) {
-    return [base, suffix];
-  }
-  return suffix ? [suffix] : [base];
 }

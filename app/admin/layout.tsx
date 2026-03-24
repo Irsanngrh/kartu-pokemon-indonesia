@@ -4,10 +4,9 @@ import { redirect } from "next/navigation";
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  const adminEmailsString = process.env.ADMIN_EMAILS || "";
-  const adminEmailsList = adminEmailsString.split(",").map(email => email.trim());
 
-  if (!user || !adminEmailsList.includes(user.email || "")) {
+  const isAdmin = user?.app_metadata?.role === 'admin';
+  if (!user || !isAdmin) {
     redirect("/");
   }
 

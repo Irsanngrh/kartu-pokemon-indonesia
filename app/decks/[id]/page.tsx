@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { getDeckById } from '@/app/actions/decks';
 import { getCardsByIds } from '@/app/actions/cards.fetch';
 import Link from 'next/link';
-import { Layers, Edit, ArrowLeft, CalendarDays } from 'lucide-react';
+import { Layers, Edit, ChevronLeft, CalendarDays } from 'lucide-react';
 import DeckShareButton from '@/components/ui/DeckShareButton';
 import DeckDeleteButton from '@/components/ui/DeckDeleteButton';
 
@@ -51,9 +51,9 @@ export default async function DeckPreviewPage({
       {/* Back */}
       <Link
         href="/decks"
-        className="inline-flex items-center gap-2 text-sm text-foreground/50 hover:text-foreground transition-colors w-fit"
+        className="inline-flex items-center gap-2 text-sm font-medium text-foreground/60 hover:text-foreground transition-colors w-fit cursor-pointer"
       >
-        <ArrowLeft size={16} /> Kembali ke Deck
+        <ChevronLeft size={18} /> Kembali ke Deck
       </Link>
 
       {/* Header */}
@@ -78,7 +78,7 @@ export default async function DeckPreviewPage({
             <DeckShareButton deckId={id} deckName={deck.name} />
             <Link
               href={`/decks/build?id=${deck.id}`}
-              className="flex items-center gap-2 bg-foreground text-background px-5 py-2.5 rounded-xl text-sm hover:scale-105 transition-transform"
+              className="flex items-center gap-2 bg-foreground text-background h-[42px] px-5 rounded-xl text-sm transition-all shadow-sm hover:scale-105 active:scale-95 duration-200"
             >
               <Edit size={16} /> Edit Deck
             </Link>

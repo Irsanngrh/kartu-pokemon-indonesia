@@ -39,14 +39,15 @@ function DeckThumbnail({ deck }: { deck: Deck }) {
   );
 }
 
-export default function DeckDashboardView() {
+export default function DeckDashboardView({ userName, isLoggedIn }: { userName: string | null, isLoggedIn: boolean }) {
   const [decks, setDecks] = useState<Deck[]>([]);
   const [loading, setLoading] = useState(true);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchDecks();
-  }, []);
+    if (isLoggedIn) fetchDecks();
+    else setLoading(false);
+  }, [isLoggedIn]);
 
   const fetchDecks = async () => {
     setLoading(true);
@@ -72,21 +73,23 @@ export default function DeckDashboardView() {
 
       <div className="w-full">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 pb-6 border-b border-border/40">
           <div>
             <h1 className="text-2xl font-semibold mb-1 flex items-center gap-2.5">
               <Layers size={26} />
-              Deck Saya
+              Deck {userName || 'Saya'}
             </h1>
-            <p className="text-foreground/50 text-sm">Kelola dan rancang 60 kartu deck jagoan Anda.</p>
+            <p className="text-foreground/50 text-sm">Kelola dan rancang deck dengan 60 kartu terbaikmu.</p>
           </div>
-          <Link
-            href="/decks/build"
-            className="flex items-center gap-2 bg-foreground text-background px-5 py-2.5 rounded-xl text-sm transition-all shadow-sm hover:scale-105"
-          >
-            <Plus size={18} />
-            Buat Deck Baru
-          </Link>
+          {isLoggedIn && (
+            <Link
+              href="/decks/build"
+              className="flex items-center gap-2 bg-foreground text-background h-[42px] px-5 rounded-xl text-sm transition-all duration-200 shadow-sm hover:scale-105 active:scale-95"
+            >
+              <Plus size={18} />
+              Buat Deck Baru
+            </Link>
+          )}
         </div>
 
         {loading ? (
@@ -95,14 +98,9 @@ export default function DeckDashboardView() {
             <p className="text-foreground/40 text-sm">Memuat daftar deck…</p>
           </div>
         ) : decks.length === 0 ? (
-          <div className="bg-muted/30 border-2 border-dashed border-border/60 rounded-3xl p-12 text-center flex flex-col items-center justify-center">
-            <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mb-5">
-              <Layers size={32} className="text-foreground/30" />
-            </div>
-            <h3 className="text-xl font-semibold mb-2">Belum Ada Deck</h3>
-            <p className="text-foreground/50 text-sm max-w-md mx-auto">
-              Anda belum menyusun satu buah deck pun. Klik tombol di atas untuk mulai merakit 60 kartu terkuat Anda!
-            </p>
+          <div className="col-span-full py-20 flex flex-col items-center justify-center gap-3">
+            <Layers size={36} className="text-foreground/30" />
+            <p className="text-foreground/50 text-sm uppercase tracking-widest">{isLoggedIn ? 'Belum ada deck' : 'Login untuk menambahkan deck'}</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-5">

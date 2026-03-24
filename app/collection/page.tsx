@@ -1,21 +1,31 @@
 import { createClient } from "@/utils/supabase/server";
-import { redirect } from "next/navigation";
 import CollectionView from "@/components/views/CollectionView";
 
 export const revalidate = 0;
 
-export default async function CollectionPage({ searchParams }: { searchParams: Promise<{ uid?: string, n?: string }> }) {
+export default async function CollectionPage({ searchParams }: { searchParams: Promise<{ uid?: string, n?: string, tab?: string }> }) {
   const params = await searchParams;
   const targetUid = params.uid;
   const targetName = params.n;
-  
+
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
   const fetchUid = targetUid || user?.id;
 
+  // If no user is logged in and no target uid specified, show empty logged-out state
   if (!fetchUid) {
-    redirect("/");
+    const userName = "Kamu";
+    return (
+      <CollectionView
+        initialCollections={[]}
+        userName={userName}
+        isOwner={false}
+        userId=""
+        isLoggedIn={false}
+        initialTab={params.tab as "collection" | "wishlist" | undefined}
+      />
+    );
   }
 
   const { data: collections, error } = await supabase
@@ -31,11 +41,13 @@ export default async function CollectionPage({ searchParams }: { searchParams: P
   const userName = isOwner ? (user?.user_metadata?.full_name || "Anda") : (targetName || "Pengguna Lain");
 
   return (
-    <CollectionView 
-      initialCollections={collections || []} 
-      userName={userName} 
+    <CollectionView
+      initialCollections={collections || []}
+      userName={userName}
       isOwner={isOwner}
       userId={fetchUid}
+      isLoggedIn={!!user}
+      initialTab={params.tab as "collection" | "wishlist" | undefined}
     />
   );
 }

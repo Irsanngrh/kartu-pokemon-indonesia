@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import PokemonCard from "@/components/ui/PokemonCard";
 import CustomDropdown from "@/components/ui/CustomDropdown";
-import { Search, ArrowUp, Loader2, Info, RotateCcw } from "lucide-react";
+import { Search, ArrowUp, Loader2, Info, RotateCcw, BookOpen } from "lucide-react";
 import { PokemonCard as PokemonCardType } from "@/types";
 import { fetchCardsBasedOnFilters, fetchFilterOptions } from "@/app/actions/cards.fetch";
 
@@ -67,13 +67,6 @@ function getStageInfo(card: any) {
 function getSavedFilters(): Record<string, string> | null {
   if (typeof window === 'undefined') return null;
   try {
-    const navEntries = performance.getEntriesByType('navigation');
-    const isReload = navEntries.length > 0 && (navEntries[0] as PerformanceNavigationTiming).type === 'reload';
-    if (isReload) {
-      sessionStorage.removeItem('libraryFilters');
-      sessionStorage.removeItem('libraryScrollY');
-      return null;
-    }
     const raw = sessionStorage.getItem('libraryFilters');
     return raw ? JSON.parse(raw) : null;
   } catch { return null; }
@@ -82,21 +75,18 @@ function getSavedFilters(): Record<string, string> | null {
 function getSavedScrollY(): number {
   if (typeof window === 'undefined') return 0;
   try {
-    const navEntries = performance.getEntriesByType('navigation');
-    const isReload = navEntries.length > 0 && (navEntries[0] as PerformanceNavigationTiming).type === 'reload';
-    if (isReload) return 0;
     return parseInt(sessionStorage.getItem('libraryScrollY') || '0', 10);
   } catch { return 0; }
 }
 
-export default function LibraryView({ 
-  initialCards, 
-  initialTotalCount, 
-  initialFilterOptions 
-}: { 
-  initialCards: PokemonCardType[], 
-  initialTotalCount: number, 
-  initialFilterOptions: any 
+export default function LibraryView({
+  initialCards,
+  initialTotalCount,
+  initialFilterOptions
+}: {
+  initialCards: PokemonCardType[],
+  initialTotalCount: number,
+  initialFilterOptions: any
 }) {
   // Strict SSR Initialization to prevent Hydration Errors
   const [fetchedCards, setFetchedCards] = useState<PokemonCardType[]>(initialCards);
@@ -139,7 +129,7 @@ export default function LibraryView({
         setIllustratorFilter(savedFilters.illustratorFilter || "Semua");
         setRegulationFilter(savedFilters.regulationFilter || "Semua");
         setRarityFilter(savedFilters.rarityFilter || "Semua");
-        
+
         // Blank screen out briefly to indicate loading new filtered dataset
         setFetchedCards([]);
         setIsLoadingCards(true);
@@ -150,7 +140,7 @@ export default function LibraryView({
         isRestoring.current = true;
       }
     }
-    
+
     if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
     setIsInitialized(true);
   }, []);
@@ -175,14 +165,20 @@ export default function LibraryView({
     setRarityFilter('Semua');
   };
 
-  // Save filters to sessionStorage
+  // Save filters and card count to sessionStorage
   useEffect(() => {
-    if (!isInitialized) return;
+    if (!isInitialized || isRestoring.current) return;
     sessionStorage.setItem('libraryFilters', JSON.stringify({
       searchQuery, expansionFilter, cardTypeFilter, elementFilter,
       stageFilter, illustratorFilter, regulationFilter, rarityFilter
     }));
   }, [searchQuery, expansionFilter, cardTypeFilter, elementFilter, stageFilter, illustratorFilter, regulationFilter, rarityFilter, isInitialized]);
+
+  // Save displayed card count separately (used to restore enough cards for scroll)
+  useEffect(() => {
+    if (!isInitialized || isRestoring.current || fetchedCards.length === 0) return;
+    sessionStorage.setItem('libraryLimit', fetchedCards.length.toString());
+  }, [fetchedCards.length, isInitialized]);
 
   const [debouncedQuery, setDebouncedQuery] = useState(searchQuery);
 
@@ -201,12 +197,17 @@ export default function LibraryView({
         searchQuery: debouncedQuery, expansionFilter, cardTypeFilter,
         elementFilter, stageFilter, illustratorFilter, regulationFilter, rarityFilter
       };
-      const { cards, hasMore, totalCount } = await fetchCardsBasedOnFilters(filters, 0, 30);
+
+      // On restore, fetch enough cards to fill the previous viewport
+      const limitStr = isRestoring.current ? sessionStorage.getItem('libraryLimit') : null;
+      const limit = limitStr ? Math.max(parseInt(limitStr, 10) || 30, 30) : 30;
+
+      const { cards, hasMore, totalCount } = await fetchCardsBasedOnFilters(filters, 0, limit);
       if (isMounted) {
         setFetchedCards(cards);
         setHasMoreServer(hasMore);
         setTotalCount(totalCount);
-        setCurrentPage(0);
+        setCurrentPage(Math.max(0, Math.ceil(limit / 30) - 1));
         setIsLoadingCards(false);
       }
     };
@@ -234,25 +235,52 @@ export default function LibraryView({
     return () => { isMounted = false; };
   }, [expansionFilter, cardTypeFilter, elementFilter, stageFilter, illustratorFilter, regulationFilter, rarityFilter, isInitialized]);
 
-  // Track scroll position
+  // Track scroll position continuously — never save 0 because Next.js
+  // resets scrollY to 0 during route transitions which would destroy the saved value
   useEffect(() => {
     if (!isInitialized) return;
-    let timeoutId: NodeJS.Timeout;
     const handleScroll = () => {
-      if (!isRestoring.current) {
-        scrollYRef.current = window.scrollY;
-        sessionStorage.setItem('libraryScrollY', window.scrollY.toString());
+      const scrollY = Math.round(window.scrollY);
+      if (!isRestoring.current && scrollY > 0) {
+        sessionStorage.setItem('libraryScrollY', scrollY.toString());
       }
       setShowScrollTop(window.scrollY > 400);
     };
-    const throttledScroll = () => {
-      clearTimeout(timeoutId);
-      timeoutId = setTimeout(handleScroll, 100);
-    };
-    window.addEventListener('scroll', throttledScroll, { passive: true });
+    window.addEventListener('scroll', handleScroll, { passive: true });
     setShowScrollTop(window.scrollY > 400);
-    return () => window.removeEventListener('scroll', throttledScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
   }, [isInitialized]);
+
+  // Scroll restoration: runs once after cards finish loading when isRestoring is true
+  useEffect(() => {
+    if (!isRestoring.current || isLoadingCards || fetchedCards.length === 0) return;
+
+    const targetY = scrollYRef.current;
+    if (targetY <= 0) {
+      isRestoring.current = false;
+      return;
+    }
+
+    // Force scroll on every frame but stop quickly once position is reached
+    const startTime = Date.now();
+    let rafId: number;
+
+    const forceScroll = () => {
+      const elapsed = Date.now() - startTime;
+      window.scrollTo(0, targetY);
+
+      // After 300ms grace period (letting Next.js router finish), check if we're there
+      const reached = elapsed > 300 && Math.abs(window.scrollY - targetY) < 5;
+      if (reached || elapsed > 1500) {
+        isRestoring.current = false;
+        return;
+      }
+      rafId = requestAnimationFrame(forceScroll);
+    };
+
+    rafId = requestAnimationFrame(forceScroll);
+    return () => cancelAnimationFrame(rafId);
+  }, [isLoadingCards, fetchedCards]);
 
   const expansions = filterOptions.expansions || ['Semua'];
   const cardTypes = ['Semua', 'Pokémon', 'Item', 'Supporter', 'Stadium', 'Pokémon Tool', 'Energy'];
@@ -304,24 +332,24 @@ export default function LibraryView({
 
   // Scroll restoration after cards load
   useEffect(() => {
-    if (isInitialized && isRestoring.current && scrollYRef.current > 0) {
+    if (!isInitialized || displayedCards.length === 0) return;
+
+    if (isRestoring.current && scrollYRef.current > 0) {
       let attempts = 0;
       const targetY = scrollYRef.current;
       const restoreInterval = setInterval(() => {
         attempts++;
-        if (document.documentElement.scrollHeight >= targetY + window.innerHeight / 2) {
+        if (document.documentElement.scrollHeight > targetY) {
           window.scrollTo({ top: targetY, behavior: 'auto' });
         } else {
           window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'auto' });
         }
-        if (Math.abs(window.scrollY - targetY) < 5 || attempts >= 20) {
+        if ((attempts > 5 && Math.abs(window.scrollY - targetY) < 5) || attempts >= 40) {
           clearInterval(restoreInterval);
           setTimeout(() => { isRestoring.current = false; }, 100);
         }
       }, 100);
       return () => clearInterval(restoreInterval);
-    } else if (isInitialized) {
-      isRestoring.current = false;
     }
   }, [displayedCards, isInitialized]);
 
@@ -333,29 +361,34 @@ export default function LibraryView({
   };
 
   return (
-    <div className="flex flex-col gap-8 pb-10 pt-6 relative w-full">
+    <div className="flex flex-col py-8 relative w-full">
       {toastMessage && (
         <div className="fixed top-20 sm:top-24 left-1/2 -translate-x-1/2 z-[100] w-[90%] sm:w-fit max-w-[360px] sm:max-w-none bg-foreground text-background px-4 sm:px-6 py-3 sm:py-3.5 rounded-2xl sm:rounded-full shadow-2xl text-[13px] sm:text-sm flex items-center justify-center sm:justify-start gap-3 transition-all animate-in fade-in slide-in-from-top-4 text-center sm:text-left leading-relaxed sm:whitespace-nowrap">
           <Info size={18} className="text-background shrink-0" />
           <span>{toastMessage}</span>
         </div>
       )}
-      <header className="flex flex-col gap-1">
-        <h1 className="text-3xl font-semibold tracking-tight">Koleksi Kartu</h1>
-        <p className="text-foreground/50 text-sm">Jelajahi dan saring database kartu Pokémon Indonesia.</p>
+      <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+        <div>
+          <h1 className="text-2xl font-semibold mb-1 flex items-center gap-2.5">
+            <BookOpen size={26} />
+            Koleksi Kartu
+          </h1>
+          <p className="text-foreground/50 text-sm">Jelajahi database kartu Pokémon Indonesia.</p>
+        </div>
       </header>
       <div ref={filterRef} className="relative z-40 flex flex-col gap-5 p-5 md:p-6 bg-muted/30 border border-border/50 rounded-[20px]">
         <div className="flex flex-col lg:flex-row gap-4 w-full items-end">
           <div className="relative w-full lg:flex-[2] flex flex-col gap-1.5">
-            <span className="text-[10px] font-semibold uppercase tracking-widest text-foreground/50 ml-1">Pencarian</span>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-foreground/50 ml-1">Pencarian</span>
             <div className="relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-foreground/40" size={18} />
-              <input 
-                type="text" 
-                placeholder="Cari nama kartu Pokémon..." 
+              <input
+                type="text"
+                placeholder="Cari nama kartu Pokémon..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-11 pr-4 h-[40px] bg-background border border-border/50 rounded-xl focus:outline-none focus:border-foreground/30 focus:ring-1 focus:ring-foreground/30 text-sm transition-all shadow-sm"
+                className="w-full pl-11 pr-4 h-[42px] bg-background border border-border/50 rounded-xl focus:outline-none focus:border-foreground/30 focus:ring-1 focus:ring-foreground/30 text-sm transition-all shadow-sm hover:border-foreground/40"
               />
             </div>
           </div>
@@ -368,33 +401,33 @@ export default function LibraryView({
             <CustomDropdown label="Jenis Kartu" options={cardTypes} value={cardTypeFilter} onChange={handleCardTypeChange} />
           </div>
           <div className="flex-1 min-w-[130px] md:min-w-[160px] relative">
-            <CustomDropdown 
-              label="Elemen (Pokémon)" 
-              options={elements} 
-              value={cardTypeFilter !== "Pokémon" ? "Semua" : elementFilter} 
-              onChange={setElementFilter} 
-              disabled={cardTypeFilter !== "Pokémon"} 
-              disabledText="Semua" 
+            <CustomDropdown
+              label="Elemen (Pokémon)"
+              options={elements}
+              value={cardTypeFilter !== "Pokémon" ? "Semua" : elementFilter}
+              onChange={setElementFilter}
+              disabled={cardTypeFilter !== "Pokémon"}
+              disabledText="Semua"
             />
             {cardTypeFilter !== "Pokémon" && (
-              <div 
-                className="absolute inset-0 z-10 cursor-pointer" 
+              <div
+                className="absolute inset-0 z-10 cursor-pointer"
                 onClick={() => showToast("Pilih Jenis Kartu \"Pokémon\" terlebih dahulu.")}
               />
             )}
           </div>
           <div className="flex-1 min-w-[130px] md:min-w-[160px] relative">
-            <CustomDropdown 
-              label="Stage (Pokémon)" 
-              options={stages} 
-              value={cardTypeFilter !== "Pokémon" ? "Semua" : stageFilter} 
-              onChange={setStageFilter} 
-              disabled={cardTypeFilter !== "Pokémon"} 
-              disabledText="Semua" 
+            <CustomDropdown
+              label="Stage (Pokémon)"
+              options={stages}
+              value={cardTypeFilter !== "Pokémon" ? "Semua" : stageFilter}
+              onChange={setStageFilter}
+              disabled={cardTypeFilter !== "Pokémon"}
+              disabledText="Semua"
             />
             {cardTypeFilter !== "Pokémon" && (
-              <div 
-                className="absolute inset-0 z-10 cursor-pointer" 
+              <div
+                className="absolute inset-0 z-10 cursor-pointer"
                 onClick={() => showToast("Pilih Jenis Kartu \"Pokémon\" terlebih dahulu.")}
               />
             )}
@@ -420,7 +453,7 @@ export default function LibraryView({
           </button>
         )}
       </div>
-      <div className="flex items-center justify-between text-[11px] text-foreground/40 tracking-widest uppercase border-b border-border/40 pb-2">
+      <div className="flex items-center justify-between text-[11px] text-foreground/40 tracking-widest uppercase border-b border-border/40 py-4 mt-2">
         <span>Menampilkan {totalCount} Kartu</span>
       </div>
       <div className="relative z-10 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-5">
@@ -430,7 +463,7 @@ export default function LibraryView({
         {displayedCards.length === 0 && !isLoadingCards && (
           <div className="col-span-full py-20 flex flex-col items-center justify-center gap-3">
             <span className="text-4xl grayscale opacity-50">🔍</span>
-            <p className="text-foreground/50 text-sm uppercase tracking-widest">Tidak ada kartu yang cocok</p>
+            <p className="text-foreground/50 text-sm uppercase tracking-widest">Kartu tidak ditemukan</p>
           </div>
         )}
       </div>

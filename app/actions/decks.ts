@@ -18,10 +18,7 @@ export async function getUserDecks(): Promise<{ decks: Deck[]; error?: string }>
     .eq('user_id', userData.user.id)
     .order('created_at', { ascending: false });
 
-  if (error) {
-    console.error('[decks] getUserDecks error:', error.message);
-    return { decks: [], error: error.message };
-  }
+  if (error) return { decks: [], error: error.message };
 
   return { decks: (data as Deck[]) ?? [] };
 }
@@ -29,7 +26,6 @@ export async function getUserDecks(): Promise<{ decks: Deck[]; error?: string }>
 export async function getDeckById(
   deckId: string
 ): Promise<{ deck: Deck | null; error?: string }> {
-  // Use pure Supabase Anon Client to avoid SSR cookie errors for public sharing
   const publicClient = createSupabaseClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -41,10 +37,7 @@ export async function getDeckById(
     .eq('id', deckId)
     .single();
 
-  if (error) {
-    console.error('[decks] getDeckById error:', error.message);
-    return { deck: null, error: error.message };
-  }
+  if (error) return { deck: null, error: error.message };
 
   return { deck: data as Deck };
 }
@@ -60,16 +53,16 @@ export async function createDeck(
     return { deck: null, error: 'Unauthorized' };
   }
 
+  const sanitizedName = name.trim().slice(0, 100);
+  if (!sanitizedName) return { deck: null, error: 'Deck name is required' };
+
   const { data, error } = await supabase
     .from('user_decks')
-    .insert([{ user_id: userData.user.id, name, cards }])
+    .insert([{ user_id: userData.user.id, name: sanitizedName, cards }])
     .select()
     .single();
 
-  if (error) {
-    console.error('[decks] createDeck error:', error.message);
-    return { deck: null, error: error.message };
-  }
+  if (error) return { deck: null, error: error.message };
 
   return { deck: data as Deck };
 }
@@ -86,19 +79,18 @@ export async function updateDeck(
     return { deck: null, error: 'Unauthorized' };
   }
 
-  // Verify ownership before updating
+  const sanitizedName = name.trim().slice(0, 100);
+  if (!sanitizedName) return { deck: null, error: 'Deck name is required' };
+
   const { data, error } = await supabase
     .from('user_decks')
-    .update({ name, cards })
+    .update({ name: sanitizedName, cards })
     .eq('id', deckId)
-    .eq('user_id', userData.user.id) // Prevents cross-user deck mutations
+    .eq('user_id', userData.user.id)
     .select()
     .single();
 
-  if (error) {
-    console.error('[decks] updateDeck error:', error.message);
-    return { deck: null, error: error.message };
-  }
+  if (error) return { deck: null, error: error.message };
 
   return { deck: data as Deck };
 }
@@ -117,12 +109,9 @@ export async function deleteDeck(
     .from('user_decks')
     .delete()
     .eq('id', deckId)
-    .eq('user_id', userData.user.id); // Verify ownership before delete
+    .eq('user_id', userData.user.id);
 
-  if (error) {
-    console.error('[decks] deleteDeck error:', error.message);
-    return { success: false, error: error.message };
-  }
+  if (error) return { success: false, error: error.message };
 
   return { success: true };
 }

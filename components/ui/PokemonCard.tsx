@@ -10,9 +10,11 @@ interface PokemonCardProps {
   card: PokemonCardType;
   source?: 'library' | 'collection' | 'wishlist';
   priority?: boolean;
+  uid?: string;
+  n?: string;
 }
 
-export default function PokemonCard({ card, source = 'library', priority = false }: PokemonCardProps) {
+export default function PokemonCard({ card, source = 'library', priority = false, uid, n }: PokemonCardProps) {
   // Priority (above-the-fold) cards start as 'loaded' to avoid the
   // opacity-0 → opacity-100 transition blank that afflicts first rows on page load.
   const [imageState, setImageState] = useState<'loading' | 'loaded' | 'error'>(priority ? 'loaded' : 'loading');
@@ -27,7 +29,11 @@ export default function PokemonCard({ card, source = 'library', priority = false
     queryParams.append('variant', cleanVariant);
   }
   
-  if (source !== 'library') queryParams.append('from', source);
+  if (source !== 'library') {
+    queryParams.append('from', source);
+    if (uid) queryParams.append('uid', uid);
+    if (n) queryParams.append('n', n);
+  }
   
   const qs = queryParams.toString() ? `?${queryParams.toString()}` : '';
   const hrefUrl = `/${card.sets?.code || 'unknown'}/${urlCardNumber}${qs}`;

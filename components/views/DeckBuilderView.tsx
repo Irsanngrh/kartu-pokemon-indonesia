@@ -233,7 +233,7 @@ export default function DeckBuilderView({ initialDeck }: { initialDeck: Deck | n
       {/* Toast */}
       {toastMessage && (
         <div className={`fixed top-16 left-1/2 -translate-x-1/2 z-[100] px-4 sm:px-6 py-3 rounded-2xl sm:rounded-full shadow-2xl text-xs sm:text-sm flex items-center gap-2.5 w-max max-w-[92vw] animate-in slide-in-from-top-4 ${toastMessage.type === 'error' ? 'bg-red-500 text-white' : 'bg-green-500 text-white'}`}>
-          <AlertCircle size={18} className="shrink-0" /> 
+          <AlertCircle size={18} className="shrink-0" />
           <span className="leading-snug">{toastMessage.text}</span>
         </div>
       )}
@@ -263,14 +263,14 @@ export default function DeckBuilderView({ initialDeck }: { initialDeck: Deck | n
         {/* Header Left — padding compensates for parent negative margin to align with navbar */}
         <div ref={headerRef} className="pl-4 sm:pl-6 lg:pl-8 pr-0 lg:pr-8 pt-4 pb-4 border-b border-border bg-muted/20 flex flex-col gap-3 shrink-0">
           <div className="flex items-center gap-3 mb-2">
-            <button onClick={handleBack} className="inline-flex items-center gap-2 text-sm text-foreground/50 hover:text-foreground transition-colors w-fit cursor-pointer">
-              <ChevronLeft size={16} /> Kembali ke Deck
+            <button onClick={handleBack} className="inline-flex items-center gap-2 text-sm font-medium text-foreground/60 hover:text-foreground transition-colors w-fit cursor-pointer">
+              <ChevronLeft size={18} /> Kembali ke Deck
             </button>
           </div>
 
           <div className="flex flex-col gap-3">
             <div className="relative flex-1 flex flex-col gap-1 w-full">
-              <span className="text-[10px] items-end  uppercase tracking-widest text-foreground/50 ml-1">Pencarian</span>
+              <span className="text-[10px] items-end font-bold uppercase tracking-widest text-foreground/50 ml-1">Pencarian</span>
               <div className="relative w-full">
                 <Search className="absolute left-3 top-[50%] -translate-y-[50%] text-foreground/40 pointer-events-none" size={16} />
                 <input
@@ -379,7 +379,7 @@ export default function DeckBuilderView({ initialDeck }: { initialDeck: Deck | n
         <div className="flex-1 lg:overflow-y-auto lg:overflow-x-hidden lg:overscroll-contain pl-4 lg:pl-6 pr-0 lg:pr-6 pt-5 lg:pt-6 pb-6 lg:custom-scrollbar flex flex-col gap-5">
           {deckCards.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center py-10 opacity-40">
-              <p className="text-sm">Kanvas Anda Masih Kosong</p>
+              <p className="text-sm">Deck Kamu Masih Kosong</p>
               <p className="text-xs mt-1">Klik kartu di katalog untuk menambahkannya.</p>
             </div>
           ) : (
