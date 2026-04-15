@@ -7,89 +7,84 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!supabaseUrl || !supabaseKey) {
+    console.error("Missing SUPABASE URL or KEY. Please make sure .env.local exists.");
     process.exit(1);
 }
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-const FILES_TO_SEED = [
-    { filePath: "scraped_cards_MA3.json", setCode: "MA3", setName: "Evolusi Mega Impian ex" },
-    { filePath: "scraped_cards_MA2.json", setCode: "MA2", setName: "Kobaran Biru" },
-    { filePath: "scraped_cards_MA1.json", setCode: "MA1", setName: "Evolusi Mega" },
-    { filePath: "scraped_cards_SV11S.json", setCode: "SV11S", setName: "Hitam & Putih" },
-    { filePath: "scraped_cards_SV10S.json", setCode: "SV10S", setName: "Kehadiran Juara" },
-    { filePath: "scraped_cards_SV9S.json", setCode: "SV9S", setName: "Ikatan Takdir" },
-    { filePath: "scraped_cards_SV8A.json", setCode: "SV8A", setName: "Festival Terastal ex" },
-    { filePath: "scraped_cards_SV8S.json", setCode: "SV8S", setName: "Kilat Rasi" },
-    { filePath: "scraped_cards_SV7S.json", setCode: "SV7S", setName: "Bimbingan Rasi" },
-    { filePath: "scraped_cards_SV6S.json", setCode: "SV6S", setName: "Topeng Transfigurasi" },
-    { filePath: "scraped_cards_SV5A.json", setCode: "SV5A", setName: "Paradoks Andalan" },
-    { filePath: "scraped_cards_SV5S.json", setCode: "SV5S", setName: "Harta Berkilau ex" },
-    { filePath: "scraped_cards_SV4S.json", setCode: "SV4S", setName: "Pertemuan Paradoks" },
-    { filePath: "scraped_cards_SV3S.json", setCode: "SV3S", setName: "Kilau Hitam" },
-    { filePath: "scraped_cards_SV2A.json", setCode: "SV2A", setName: "Kartu Pokémon 151" },
-    { filePath: "scraped_cards_SV2P.json", setCode: "SV2P", setName: "Mara Bahaya Salju" },
-    { filePath: "scraped_cards_SV2D.json", setCode: "SV2D", setName: "Letusan Tanah" },
-    { filePath: "scraped_cards_SV1S.json", setCode: "SV1S", setName: "Hantaman Triplet" },
-    { filePath: "scraped_cards_SV1V.json", setCode: "SV1V", setName: "Violet ex" },
-    { filePath: "scraped_cards_SV1S.json", setCode: "SV1S", setName: "Scarlet ex" },
-    { filePath: "scraped_cards_S12A.json", setCode: "S12A", setName: "VSTAR Semesta" },
-    { filePath: "scraped_cards_S12.json", setCode: "S12", setName: "Pemicu Paradigma" },
-    { filePath: "scraped_cards_S11A.json", setCode: "S11A", setName: "Arkana Memuncak" },
-    { filePath: "scraped_cards_S11.json", setCode: "S11", setName: "Neraka Sirna" },
-    { filePath: "scraped_cards_S10A.json", setCode: "S10A", setName: "Fantom Kegelapan" },
-    { filePath: "scraped_cards_S10P.json", setCode: "S10P", setName: "Penyulap Ruang" },
-    { filePath: "scraped_cards_S10D.json", setCode: "S10D", setName: "Pengamat Waktu" },
-    { filePath: "scraped_cards_S10B.json", setCode: "S10B", setName: "Pokémon GO" },
-    { filePath: "scraped_cards_S9A.json", setCode: "S9A", setName: "Pertarungan Daerah" },
-    { filePath: "scraped_cards_S9.json", setCode: "S9", setName: "Star Birth" },
-    { filePath: "scraped_cards_S8B.json", setCode: "S8B", setName: "VMAX Klimaks" },
-    { filePath: "scraped_cards_S8.json", setCode: "S8", setName: "Teknik Fusion" },
-    { filePath: "scraped_cards_S8A.json", setCode: "S8A", setName: "Koleksi Peringatan Perayaan 25 Tahun" },
-    { filePath: "scraped_cards_S7D.json", setCode: "S7D", setName: "Pencakar Langit Sempurna" },
-    { filePath: "scraped_cards_S7R.json", setCode: "S7R", setName: "Arus Langit Biru" }
-];
-
 async function seedDatabase() {
-    for (let setIndex = 0; setIndex < FILES_TO_SEED.length; setIndex++) {
-        const fileInfo = FILES_TO_SEED[setIndex];
-        const fullPath = path.join(__dirname, "..", fileInfo.filePath);
-        const targetOrder = setIndex + 1;
+    const metaPath = path.join(__dirname, "..", "data", "scraped_sets_metadata.json");
+    if (!fs.existsSync(metaPath)) {
+        console.error("data/scraped_sets_metadata.json not found! Please run scrape.js first.");
+        process.exit(1);
+    }
 
-        if (!fs.existsSync(fullPath)) {
-            continue;
-        }
+    const setsMetadata = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
 
-        console.log(`\nProcessing: ${fileInfo.setName} (${fileInfo.setCode})`);
+    for (const setInfo of setsMetadata) {
+        const filePath = `scraped_cards_${setInfo.code}.json`;
+        const fullPath = path.join(__dirname, "..", "data", filePath);
+
+        // Ensure we process the set even if there are no cards scraped (e.g. promo sets without cards)
+        // just to create the set entry in Supabase.
+        console.log(`\nProcessing Set: ${setInfo.name} (${setInfo.code})`);
 
         let { data: existingSet } = await supabase
             .from('sets')
-            .select('id, set_order')
-            .eq('code', fileInfo.setCode)
+            .select('id, set_order, series_name, image_url, release_date')
+            .eq('code', setInfo.code)
             .single();
 
         if (!existingSet) {
-            const { data: newSet } = await supabase
+            const { data: newSet, error } = await supabase
                 .from('sets')
                 .insert({
-                    code: fileInfo.setCode,
-                    name: fileInfo.setName,
-                    set_order: targetOrder
+                    code: setInfo.code,
+                    name: setInfo.name,
+                    set_order: setInfo.set_order,
+                    series_name: setInfo.series_name,
+                    image_url: setInfo.image_url,
+                    release_date: setInfo.release_date
                 })
                 .select()
                 .single();
 
+            if (error) {
+                console.error(`Failed to insert set ${setInfo.code}:`, error.message);
+                continue;
+            }
             existingSet = newSet;
-        } else if (existingSet.set_order !== targetOrder) {
-            await supabase
-                .from('sets')
-                .update({ set_order: targetOrder })
-                .eq('id', existingSet.id);
+        } else {
+            // Update the set if any metadata differs
+            if (
+                existingSet.set_order !== setInfo.set_order ||
+                existingSet.series_name !== setInfo.series_name ||
+                existingSet.image_url !== setInfo.image_url ||
+                existingSet.release_date !== setInfo.release_date ||
+                existingSet.name !== setInfo.name
+            ) {
+                await supabase
+                    .from('sets')
+                    .update({
+                        set_order: setInfo.set_order,
+                        name: setInfo.name,
+                        series_name: setInfo.series_name,
+                        image_url: setInfo.image_url,
+                        release_date: setInfo.release_date
+                    })
+                    .eq('id', existingSet.id);
+            }
+        }
+
+        // Check if there are scraped cards to seed
+        if (!fs.existsSync(fullPath)) {
+            console.log(`No card data file found for ${setInfo.code} (${filePath}), skipping card upload.`);
+            continue;
         }
 
         const rawData = fs.readFileSync(fullPath, 'utf8');
         const rawCards = JSON.parse(rawData);
-
         const groupedCards = {};
 
         for (const card of rawCards) {
@@ -102,7 +97,6 @@ async function seedDatabase() {
 
         for (const num in groupedCards) {
             const group = groupedCards[num];
-
             group.sort((a, b) => (a.image_url || "").localeCompare(b.image_url || ""));
 
             group.forEach((card, index) => {
@@ -121,9 +115,10 @@ async function seedDatabase() {
 
         for (let i = 0; i < processedCards.length; i++) {
             const card = processedCards[i];
+            console.log(`[${i + 1}/${processedCards.length}] Uploading: ${card.name} (${setInfo.code})`);
 
-            console.log(`[${i + 1}/${processedCards.length}] Uploading: ${card.name}`);
-
+            // Check if card exists to maybe update?
+            // Existing seed.js just forcefully inserts, so we'll keep the insert logic assuming db is wiped.
             await supabase.from('cards').insert({
                 set_id: existingSet.id,
                 card_number: card.card_number || null,
@@ -151,6 +146,7 @@ async function seedDatabase() {
             });
         }
     }
+    console.log("\nDatabase Seeding Completed Successfully!");
 }
 
 seedDatabase();

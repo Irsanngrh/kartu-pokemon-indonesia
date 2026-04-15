@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef } from "react";
+import Link from "next/link";
 import PokemonCard from "@/components/ui/PokemonCard";
 import CustomDropdown from "@/components/ui/CustomDropdown";
-import { Search, ArrowUp, Loader2, Info, RotateCcw, BookOpen } from "lucide-react";
+import { Search, ArrowUp, Loader2, Info, RotateCcw, BookOpen, Layers } from "lucide-react";
 import { PokemonCard as PokemonCardType } from "@/types";
 import { fetchCardsBasedOnFilters, fetchFilterOptions } from "@/app/actions/cards.fetch";
 
@@ -14,7 +15,7 @@ function getCardType(card: any) {
   if (stage.includes("stadium")) return "Stadium";
   if (stage.includes("tool")) return "Pokémon Tool";
   if (stage.includes("item")) return "Item";
-  if (stage.includes("energy") || stage.includes("energi")) return "Energy";
+  if (stage.includes("energy") || stage.includes("energi")) return "Energi";
   return "Lainnya";
 }
 
@@ -63,7 +64,7 @@ function getStageInfo(card: any) {
   return { categories: [base] };
 }
 
-// Read saved filters synchronously — safe on server (returns null)
+// Reads saved filters from sessionStorage — returns null on server.
 function getSavedFilters(): Record<string, string> | null {
   if (typeof window === 'undefined') return null;
   try {
@@ -82,11 +83,13 @@ function getSavedScrollY(): number {
 export default function LibraryView({
   initialCards,
   initialTotalCount,
-  initialFilterOptions
+  initialFilterOptions,
+  initialExpansionFilter
 }: {
   initialCards: PokemonCardType[],
   initialTotalCount: number,
-  initialFilterOptions: any
+  initialFilterOptions: any,
+  initialExpansionFilter?: string
 }) {
   // Strict SSR Initialization to prevent Hydration Errors
   const [fetchedCards, setFetchedCards] = useState<PokemonCardType[]>(initialCards);
@@ -96,9 +99,9 @@ export default function LibraryView({
   const [isLoadingCards, setIsLoadingCards] = useState(false);
   const [filterOptions, setFilterOptions] = useState(initialFilterOptions);
 
-  // Filters initialized conservatively (we hydrate these in useEffect if there's saved session data)
+  // Filters initialized conservatively — hydrated from sessionStorage in useEffect.
   const [searchQuery, setSearchQuery] = useState("");
-  const [expansionFilter, setExpansionFilter] = useState("Semua");
+  const [expansionFilter, setExpansionFilter] = useState(initialExpansionFilter || "Semua");
   const [cardTypeFilter, setCardTypeFilter] = useState("Semua");
   const [elementFilter, setElementFilter] = useState("Semua");
   const [stageFilter, setStageFilter] = useState("Semua");
@@ -120,7 +123,27 @@ export default function LibraryView({
       const savedFilters = getSavedFilters();
       const savedScroll = getSavedScrollY();
 
-      if (savedFilters) {
+      if (initialExpansionFilter && initialExpansionFilter !== "Semua") {
+        setSearchQuery("");
+        setExpansionFilter(initialExpansionFilter);
+        setCardTypeFilter("Semua");
+        setElementFilter("Semua");
+        setStageFilter("Semua");
+        setIllustratorFilter("Semua");
+        setRegulationFilter("Semua");
+        setRarityFilter("Semua");
+
+        sessionStorage.setItem('libraryFilters', JSON.stringify({
+          searchQuery: "",
+          expansionFilter: initialExpansionFilter,
+          cardTypeFilter: "Semua",
+          elementFilter: "Semua",
+          stageFilter: "Semua",
+          illustratorFilter: "Semua",
+          regulationFilter: "Semua",
+          rarityFilter: "Semua"
+        }));
+      } else if (savedFilters) {
         setSearchQuery(savedFilters.searchQuery || "");
         setExpansionFilter(savedFilters.expansionFilter || "Semua");
         setCardTypeFilter(savedFilters.cardTypeFilter || "Semua");
@@ -130,7 +153,7 @@ export default function LibraryView({
         setRegulationFilter(savedFilters.regulationFilter || "Semua");
         setRarityFilter(savedFilters.rarityFilter || "Semua");
 
-        // Blank screen out briefly to indicate loading new filtered dataset
+        // Clear displayed cards to show loading state for new filter set.
         setFetchedCards([]);
         setIsLoadingCards(true);
       }
@@ -165,7 +188,7 @@ export default function LibraryView({
     setRarityFilter('Semua');
   };
 
-  // Save filters and card count to sessionStorage
+  // Persist current filters to sessionStorage for back-navigation restoration.
   useEffect(() => {
     if (!isInitialized || isRestoring.current) return;
     sessionStorage.setItem('libraryFilters', JSON.stringify({
@@ -174,7 +197,7 @@ export default function LibraryView({
     }));
   }, [searchQuery, expansionFilter, cardTypeFilter, elementFilter, stageFilter, illustratorFilter, regulationFilter, rarityFilter, isInitialized]);
 
-  // Save displayed card count separately (used to restore enough cards for scroll)
+  // Persist visible card count so scroll restoration can fetch enough cards.
   useEffect(() => {
     if (!isInitialized || isRestoring.current || fetchedCards.length === 0) return;
     sessionStorage.setItem('libraryLimit', fetchedCards.length.toString());
@@ -198,11 +221,11 @@ export default function LibraryView({
         elementFilter, stageFilter, illustratorFilter, regulationFilter, rarityFilter
       };
 
-      // On restore, fetch enough cards to fill the previous viewport
+      // On restore, fetch enough cards to cover the previous scroll position.
       const limitStr = isRestoring.current ? sessionStorage.getItem('libraryLimit') : null;
       const limit = limitStr ? Math.max(parseInt(limitStr, 10) || 30, 30) : 30;
 
-      const { cards, hasMore, totalCount } = await fetchCardsBasedOnFilters(filters, 0, limit);
+      const { cards, hasMore, totalCount } = await fetchCardsBasedOnFilters(filters, 0, limit, true);
       if (isMounted) {
         setFetchedCards(cards);
         setHasMoreServer(hasMore);
@@ -215,17 +238,20 @@ export default function LibraryView({
     return () => { isMounted = false; };
   }, [debouncedQuery, expansionFilter, cardTypeFilter, elementFilter, stageFilter, illustratorFilter, regulationFilter, rarityFilter, isInitialized]);
 
-  // Dynamic filter options
+  // Derive dynamic filter option lists from current result set.
   useEffect(() => {
     if (!isInitialized) return;
     let isMounted = true;
     const fetchOptions = async () => {
       const opts = await fetchFilterOptions({
+        searchQuery: debouncedQuery,
         expansionFilter, cardTypeFilter, elementFilter,
         stageFilter, illustratorFilter, regulationFilter, rarityFilter,
       });
       if (isMounted) {
         setFilterOptions(opts);
+        if (elementFilter !== 'Semua' && opts.elements && !opts.elements.includes(elementFilter)) setElementFilter('Semua');
+        if (stageFilter !== 'Semua' && opts.stages && !opts.stages.includes(stageFilter)) setStageFilter('Semua');
         if (illustratorFilter !== 'Semua' && !opts.illustrators.includes(illustratorFilter)) setIllustratorFilter('Semua');
         if (regulationFilter !== 'Semua' && !opts.regulations.includes(regulationFilter)) setRegulationFilter('Semua');
         if (rarityFilter !== 'Semua' && !opts.rarities.includes(rarityFilter)) setRarityFilter('Semua');
@@ -233,10 +259,9 @@ export default function LibraryView({
     };
     fetchOptions();
     return () => { isMounted = false; };
-  }, [expansionFilter, cardTypeFilter, elementFilter, stageFilter, illustratorFilter, regulationFilter, rarityFilter, isInitialized]);
+  }, [debouncedQuery, expansionFilter, cardTypeFilter, elementFilter, stageFilter, illustratorFilter, regulationFilter, rarityFilter, isInitialized]);
 
-  // Track scroll position continuously — never save 0 because Next.js
-  // resets scrollY to 0 during route transitions which would destroy the saved value
+  // Track scroll position — skip saving 0 since Next.js resets scrollY during route transitions.
   useEffect(() => {
     if (!isInitialized) return;
     const handleScroll = () => {
@@ -251,9 +276,9 @@ export default function LibraryView({
     return () => window.removeEventListener('scroll', handleScroll);
   }, [isInitialized]);
 
-  // Scroll restoration: runs once after cards finish loading when isRestoring is true
+  // Scroll restoration via rAF — polls until position is reached or timeout exceeded.
   useEffect(() => {
-    if (!isRestoring.current || isLoadingCards || fetchedCards.length === 0) return;
+    if (!isInitialized || !isRestoring.current || isLoadingCards || fetchedCards.length === 0) return;
 
     const targetY = scrollYRef.current;
     if (targetY <= 0) {
@@ -261,31 +286,34 @@ export default function LibraryView({
       return;
     }
 
-    // Force scroll on every frame but stop quickly once position is reached
     const startTime = Date.now();
     let rafId: number;
 
     const forceScroll = () => {
       const elapsed = Date.now() - startTime;
-      window.scrollTo(0, targetY);
+      // Read before write to avoid layout thrashing.
+      const currentY = window.scrollY;
+      const docHeight = document.documentElement.scrollHeight;
+      const reached = elapsed > 300 && Math.abs(currentY - targetY) < 5;
 
-      // After 300ms grace period (letting Next.js router finish), check if we're there
-      const reached = elapsed > 300 && Math.abs(window.scrollY - targetY) < 5;
       if (reached || elapsed > 1500) {
         isRestoring.current = false;
         return;
       }
+
+      const scrollTarget = docHeight > targetY ? targetY : docHeight;
+      window.scrollTo(0, scrollTarget);
       rafId = requestAnimationFrame(forceScroll);
     };
 
     rafId = requestAnimationFrame(forceScroll);
     return () => cancelAnimationFrame(rafId);
-  }, [isLoadingCards, fetchedCards]);
+  }, [isInitialized, isLoadingCards, fetchedCards]);
 
   const expansions = filterOptions.expansions || ['Semua'];
-  const cardTypes = ['Semua', 'Pokémon', 'Item', 'Supporter', 'Stadium', 'Pokémon Tool', 'Energy'];
-  const elements = ['Semua', 'Normal', 'Api', 'Air', 'Listrik', 'Rumput', 'Petarung', 'Psikis', 'Naga', 'Kegelapan', 'Baja'];
-  const stages = ['Semua', 'Basic', 'Stage 1', 'Stage 2', 'EX', 'GX', 'V', 'V-UNION', 'VMAX', 'VSTAR'];
+  const cardTypes = ['Semua', 'Pokémon', 'Item', 'Supporter', 'Stadium', 'Pokémon Tool', 'Energi'];
+  const elements = filterOptions.elements || ['Semua', 'Normal', 'Api', 'Air', 'Listrik', 'Rumput', 'Petarung', 'Psikis', 'Naga', 'Kegelapan', 'Baja'];
+  const stages = filterOptions.stages || ['Semua', 'Basic', 'Stage 1', 'Stage 2', 'EX', 'GX', 'V', 'V-UNION', 'VMAX', 'VSTAR'];
   const illustrators = filterOptions.illustrators || ["Semua"];
   const regulations = filterOptions.regulations || ["Semua"];
   const rarities = filterOptions.rarities || ["Semua"];
@@ -309,14 +337,14 @@ export default function LibraryView({
       elementFilter, stageFilter, illustratorFilter, regulationFilter, rarityFilter
     };
     const nextPage = currentPage + 1;
-    const { cards, hasMore } = await fetchCardsBasedOnFilters(filters, nextPage, 30);
+    const { cards, hasMore } = await fetchCardsBasedOnFilters(filters, nextPage, 30, true);
     setFetchedCards(prev => [...prev, ...cards]);
     setCurrentPage(nextPage);
     setHasMoreServer(hasMore);
     setIsLoadingCards(false);
   };
 
-  // Infinite scroll observer
+  // Infinite scroll observer.
   useEffect(() => {
     const currentObserver = new IntersectionObserver(
       (entries) => {
@@ -330,28 +358,7 @@ export default function LibraryView({
     return () => { if (loaderRef.current) currentObserver.unobserve(loaderRef.current); };
   }, [hasMoreServer, isLoadingCards, currentPage]);
 
-  // Scroll restoration after cards load
-  useEffect(() => {
-    if (!isInitialized || displayedCards.length === 0) return;
 
-    if (isRestoring.current && scrollYRef.current > 0) {
-      let attempts = 0;
-      const targetY = scrollYRef.current;
-      const restoreInterval = setInterval(() => {
-        attempts++;
-        if (document.documentElement.scrollHeight > targetY) {
-          window.scrollTo({ top: targetY, behavior: 'auto' });
-        } else {
-          window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'auto' });
-        }
-        if ((attempts > 5 && Math.abs(window.scrollY - targetY) < 5) || attempts >= 40) {
-          clearInterval(restoreInterval);
-          setTimeout(() => { isRestoring.current = false; }, 100);
-        }
-      }, 100);
-      return () => clearInterval(restoreInterval);
-    }
-  }, [displayedCards, isInitialized]);
 
   const scrollToFilters = () => {
     if (filterRef.current) {
@@ -363,8 +370,8 @@ export default function LibraryView({
   return (
     <div className="flex flex-col py-8 relative w-full">
       {toastMessage && (
-        <div className="fixed top-20 sm:top-24 left-1/2 -translate-x-1/2 z-[100] w-[90%] sm:w-fit max-w-[360px] sm:max-w-none bg-foreground text-background px-4 sm:px-6 py-3 sm:py-3.5 rounded-2xl sm:rounded-full shadow-2xl text-[13px] sm:text-sm flex items-center justify-center sm:justify-start gap-3 transition-all animate-in fade-in slide-in-from-top-4 text-center sm:text-left leading-relaxed sm:whitespace-nowrap">
-          <Info size={18} className="text-background shrink-0" />
+        <div className="fixed top-20 sm:top-24 left-1/2 -translate-x-1/2 z-[100] w-[90%] sm:w-fit max-w-[360px] sm:max-w-none bg-background dark:bg-muted/30 border border-border/50 text-foreground px-4 sm:px-6 py-3 sm:py-3.5 rounded-2xl sm:rounded-full shadow-2xl text-[13px] sm:text-sm flex items-center justify-center sm:justify-start gap-3 transition-all animate-in fade-in slide-in-from-top-4 text-center sm:text-left leading-relaxed sm:whitespace-nowrap">
+          <Info size={18} className="text-foreground shrink-0" />
           <span>{toastMessage}</span>
         </div>
       )}
@@ -379,7 +386,7 @@ export default function LibraryView({
       </header>
       <div ref={filterRef} className="relative z-40 flex flex-col gap-5 p-5 md:p-6 bg-muted/30 border border-border/50 rounded-[20px]">
         <div className="flex flex-col lg:flex-row gap-4 w-full items-end">
-          <div className="relative w-full lg:flex-[2] flex flex-col gap-1.5">
+          <div className="relative w-full lg:w-[55%] xl:w-[60%] flex flex-col gap-1.5">
             <span className="text-[10px] font-bold uppercase tracking-widest text-foreground/50 ml-1">Pencarian</span>
             <div className="relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-foreground/40" size={18} />
@@ -392,8 +399,17 @@ export default function LibraryView({
               />
             </div>
           </div>
-          <div className="w-full lg:flex-[1] min-w-[250px]">
-            <CustomDropdown label="Ekspansi" options={expansions} value={expansionFilter} onChange={setExpansionFilter} />
+          <div className="w-full lg:w-[45%] xl:w-[40%] flex flex-col sm:flex-row items-stretch sm:items-end gap-2">
+            <div className="flex-1">
+              <CustomDropdown label="Ekspansi" options={expansions} value={expansionFilter} onChange={setExpansionFilter} />
+            </div>
+            <Link 
+              href="/sets" 
+              className="h-[42px] px-4 flex items-center justify-center gap-2 bg-background border border-border/50 text-foreground/80 rounded-xl text-sm whitespace-nowrap hover:bg-muted/30 hover:text-foreground transition-all shadow-sm"
+            >
+              <BookOpen size={16} />
+              Lihat Semua Ekspansi
+            </Link>
           </div>
         </div>
         <div className="flex flex-wrap gap-3 lg:gap-4">
@@ -442,7 +458,6 @@ export default function LibraryView({
             <CustomDropdown label="Rarity" options={rarities} value={rarityFilter} onChange={setRarityFilter} />
           </div>
         </div>
-        {/* Reset filters button */}
         {isAnyFilterActive && (
           <button
             onClick={handleResetFilters}
@@ -453,12 +468,12 @@ export default function LibraryView({
           </button>
         )}
       </div>
-      <div className="flex items-center justify-between text-[11px] text-foreground/40 tracking-widest uppercase border-b border-border/40 py-4 mt-2">
+      <div className="flex items-center justify-between text-[11px] text-foreground/40 tracking-widest uppercase py-4 mt-2">
         <span>Menampilkan {totalCount} Kartu</span>
       </div>
       <div className="relative z-10 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-5">
         {displayedCards.map((card, index) => (
-          <PokemonCard key={card.id} card={card} source="library" priority={index < 18} />
+          <PokemonCard key={card.id} card={card} source="library" priority={index < 6} />
         ))}
         {displayedCards.length === 0 && !isLoadingCards && (
           <div className="col-span-full py-20 flex flex-col items-center justify-center gap-3">
@@ -478,7 +493,7 @@ export default function LibraryView({
       {showScrollTop && (
         <button
           onClick={scrollToFilters}
-          className="fixed bottom-6 right-6 p-3.5 bg-foreground text-background rounded-full shadow-2xl hover:scale-110 transition-transform z-50 flex items-center justify-center border border-border/20"
+          className="fixed bottom-6 right-6 p-3.5 bg-background dark:bg-muted/50 text-foreground border border-border/50 rounded-full shadow-2xl hover:scale-110 hover:bg-muted/50 transition-all z-50 flex items-center justify-center"
         >
           <ArrowUp size={22} strokeWidth={2.5} />
         </button>

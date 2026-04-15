@@ -41,6 +41,8 @@ yarn-error.log*
 next-env.d.ts
 
 # scraping/seeding scripts — development-only, not for version control
+data/
+scraped_sets_metadata.json
 scraped_cards_*.json
 /scripts/scrape.js
 /scripts/seed.js

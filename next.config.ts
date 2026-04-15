@@ -1,9 +1,6 @@
 import type { NextConfig } from "next";
-import { withSentryConfig } from "@sentry/nextjs";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
-const sentryDsn = process.env.NEXT_PUBLIC_SENTRY_DSN ?? '';
-const sentryOrigin = sentryDsn ? new URL(sentryDsn).origin : '';
 
 const cspDirectives = [
   "default-src 'self'",
@@ -11,16 +8,40 @@ const cspDirectives = [
   `style-src 'self' 'unsafe-inline'`,
   `img-src 'self' data: blob: ${supabaseUrl} https://asia.pokemon-card.com https://lh3.googleusercontent.com`,
   `font-src 'self'`,
-  `connect-src 'self' ${supabaseUrl} ${sentryOrigin} https://accounts.google.com`,
+  `connect-src 'self' ${supabaseUrl} https://accounts.google.com`,
   "frame-src https://accounts.google.com",
   "frame-ancestors 'none'",
   "base-uri 'self'",
-  "form-action 'self'",
+  "form-action 'self' https://accounts.google.com",
 ];
 
 const nextConfig: NextConfig = {
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "asia.pokemon-card.com",
+      },
+    ],
+    minimumCacheTTL: 86400,
+    formats: ['image/webp'],
+    deviceSizes: [640, 828, 1080, 1200],
+    imageSizes: [256, 384, 512],
+  },
   async headers() {
     return [
+      {
+        source: "/_next/static/:path*",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
+        ],
+      },
+      {
+        source: "/(.*)\\.(svg|ico|png|jpg|jpeg|webp|avif|woff|woff2)",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
+        ],
+      },
       {
         source: "/(.*)",
         headers: [
@@ -35,9 +56,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default withSentryConfig(nextConfig, {
-  silent: true,
-  org: "kartu-pokemon-indonesia",
-  project: "kartu-pokemon-indonesia",
-  widenClientFileUpload: true,
-});
+export default nextConfig;

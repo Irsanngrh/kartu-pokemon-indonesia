@@ -2,12 +2,12 @@ import { createClient } from "@/utils/supabase/server";
 import { notFound } from "next/navigation";
 import CardDetailView from "@/components/views/CardDetailView";
 
-export const revalidate = 0;
+export const revalidate = 3600;
 
 export default async function CardDetail({ params }: { params: Promise<{ set_code: string; card_number: string }> }) {
   const resolvedParams = await params;
   const { set_code, card_number } = resolvedParams;
-  const supabase = await createClient();
+  const supabase = createClient();
 
   const { data: cards, error } = await supabase
     .from("cards")

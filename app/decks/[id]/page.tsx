@@ -1,4 +1,4 @@
-import { createClient } from '@/utils/supabase/server';
+import { auth } from '@/auth';
 import { redirect } from 'next/navigation';
 import { getDeckById } from '@/app/actions/decks';
 import { getCardsByIds } from '@/app/actions/cards.fetch';
@@ -12,9 +12,8 @@ export default async function DeckPreviewPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const supabase = await createClient();
-  const { data: authData } = await supabase.auth.getUser();
-  const currentUserId = authData?.user?.id ?? null;
+  const session = await auth();
+  const currentUserId = session?.user?.id ?? null;
 
   const { id } = await params;
   const { deck, error: deckError } = await getDeckById(id);
@@ -78,7 +77,7 @@ export default async function DeckPreviewPage({
             <DeckShareButton deckId={id} deckName={deck.name} />
             <Link
               href={`/decks/build?id=${deck.id}`}
-              className="flex items-center gap-2 bg-foreground text-background h-[42px] px-5 rounded-xl text-sm transition-all shadow-sm hover:scale-105 active:scale-95 duration-200"
+              className="flex items-center gap-2 bg-background dark:bg-muted/30 border border-border/50 text-foreground h-[42px] px-5 rounded-xl text-sm transition-all shadow-sm hover:bg-muted/50 active:scale-95"
             >
               <Edit size={16} /> Edit Deck
             </Link>
@@ -88,7 +87,7 @@ export default async function DeckPreviewPage({
       </div>
 
       {/* Card grid grouped by category */}
-      {(['Pokemon', 'Trainer', 'Energy'] as const).map((category) => {
+      {(['Pokemon', 'Trainer', 'Energi'] as const).map((category) => {
         const itemsInCategory = deck.cards?.filter((item) => {
           const c = cardMap[item.cardId];
           if (!c) return category === 'Pokemon';
@@ -96,7 +95,7 @@ export default async function DeckPreviewPage({
             c.name.toLowerCase().includes('energi') ||
             c.name.toLowerCase().includes('energy');
           const isTrainer = !c.hp && !c.types?.length && !isEnergy;
-          if (category === 'Energy') return isEnergy;
+          if (category === 'Energi') return isEnergy;
           if (category === 'Trainer') return isTrainer;
           return !isTrainer && !isEnergy;
         }) ?? [];
@@ -129,7 +128,7 @@ export default async function DeckPreviewPage({
                         </div>
                       )}
                       {item.quantity > 1 && (
-                        <span className="absolute top-1 right-1 bg-foreground text-background text-[10px] w-5 h-5 flex items-center justify-center rounded-full font-semibold shadow">
+                        <span className="absolute top-1 right-1 bg-background dark:bg-muted/50 border border-border/50 text-foreground text-[10px] w-5 h-5 flex items-center justify-center rounded-full font-semibold shadow">
                           {item.quantity}
                         </span>
                       )}

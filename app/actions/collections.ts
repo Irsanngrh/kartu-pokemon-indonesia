@@ -1,12 +1,15 @@
 "use server";
 
+import { auth } from "@/auth";
 import { createClient } from "@/utils/supabase/server";
 
 export async function updateCollectionAction(cardId: string | number, quantity: number, isWishlist: boolean) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const session = await auth();
+  const user = session?.user;
 
   if (!user) return { error: "Unauthorized access" };
+
+  const supabase = createClient();
 
   const { data: existing } = await supabase
     .from("user_collections")

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { Search, Edit2, Plus, X, Save, Trash2, ArrowUp, Loader2 } from "lucide-react";
+import { Search, Edit2, Plus, X, Save, Trash2, ArrowUp, Loader2, Info } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import CustomDropdown from "@/components/ui/CustomDropdown";
 import { addCardAction, updateCardAction, deleteCardAction } from "@/app/actions/cards";
@@ -18,7 +18,13 @@ export default function AdminTableView({ initialCards, availableSets }: { initia
   const [isSaving, setIsSaving] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [page, setPage] = useState(0);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const PAGE_SIZE = 100;
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3500);
+  };
 
   const supabase = createClient();
 
@@ -67,7 +73,6 @@ export default function AdminTableView({ initialCards, availableSets }: { initia
     });
   }, [cards, searchQuery, expansionFilter]);
 
-  // Reset page when filters change
   useEffect(() => { setPage(0); }, [searchQuery, expansionFilter]);
 
   const totalPages = Math.ceil(filteredCards.length / PAGE_SIZE);
@@ -75,7 +80,7 @@ export default function AdminTableView({ initialCards, availableSets }: { initia
 
   const openModal = async (card?: any) => {
     if (card) {
-      // Lazy Fetching: Fetch heavy payload (attacks, descriptions) ONLY when the edit button is triggered
+      // Fetch full card data (including attacks and descriptions) only when editing.
       setFetchingId(card.id);
       const { data: fullCardData, error } = await supabase
         .from("cards")
@@ -185,7 +190,7 @@ export default function AdminTableView({ initialCards, availableSets }: { initia
       }
       closeModal();
     } catch (err: any) {
-      alert("Gagal menyimpan: " + err.message);
+      showToast("Gagal menyimpan: " + err.message);
     } finally {
       setIsSaving(false);
     }
@@ -201,13 +206,19 @@ export default function AdminTableView({ initialCards, availableSets }: { initia
       setCards(cards.filter(c => c.id !== editingId));
       closeModal();
     } else {
-      alert("Gagal menghapus: " + error);
+      showToast("Gagal menghapus: " + error);
     }
     setIsSaving(false);
   };
 
   return (
     <div className="flex flex-col gap-6 relative w-full">
+      {toastMessage && (
+        <div className="fixed top-20 sm:top-24 left-1/2 -translate-x-1/2 z-[100] w-[90%] sm:w-fit max-w-[360px] sm:max-w-none bg-background dark:bg-muted/30 border border-border/50 text-foreground px-4 sm:px-6 py-3 sm:py-3.5 rounded-2xl sm:rounded-full shadow-2xl text-[13px] sm:text-sm flex items-center justify-center sm:justify-start gap-3 transition-all animate-in fade-in slide-in-from-top-4 text-center sm:text-left leading-relaxed sm:whitespace-nowrap">
+          <Info size={18} className="text-foreground shrink-0" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
       <div className="flex flex-col lg:flex-row gap-4 items-end justify-between p-5 bg-muted/30 border border-border/50 rounded-[20px]">
         <div className="flex flex-col lg:flex-row items-end gap-4 w-full flex-1">
           <div className="relative w-full lg:flex-[2] flex flex-col gap-1.5">
@@ -217,7 +228,7 @@ export default function AdminTableView({ initialCards, availableSets }: { initia
               <input
                 type="text" placeholder="Cari nama atau nomor kartu Pokémon..."
                 value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-11 pr-4 h-[40px] bg-background border border-border/60 rounded-xl focus:outline-none focus:border-foreground/30 text-sm  shadow-sm"
+                className="w-full pl-11 pr-4 h-[42px] bg-background border border-border/60 rounded-xl focus:outline-none focus:border-foreground/30 text-sm shadow-sm"
               />
             </div>
           </div>
@@ -225,18 +236,17 @@ export default function AdminTableView({ initialCards, availableSets }: { initia
             <CustomDropdown label="Filter Ekspansi" options={expansions} value={expansionFilter} onChange={setExpansionFilter} />
           </div>
         </div>
-        <button onClick={() => openModal()} className="w-full lg:w-auto flex items-center justify-center gap-2 px-5 h-[40px] bg-foreground text-background  text-sm rounded-xl hover:scale-105 transition-transform shadow-md whitespace-nowrap">
+        <button onClick={() => openModal()} className="w-full lg:w-auto flex items-center justify-center gap-2 px-5 h-[42px] bg-background border border-border/50 text-foreground text-sm rounded-xl hover:bg-muted/30 transition-all shadow-md whitespace-nowrap cursor-pointer">
           <Plus size={18} /> Tambah Kartu
         </button>
       </div>
 
-      {/* Pagination controls */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between text-sm">
           <span className="text-foreground/50 text-xs">{filteredCards.length} kartu • Halaman {page + 1}/{totalPages}</span>
           <div className="flex items-center gap-2">
-            <button disabled={page === 0} onClick={() => { setPage(p => p - 1); scrollToTop(); }} className="px-3 py-1.5 text-xs rounded-lg border border-border/50 hover:bg-muted disabled:opacity-30 transition-colors">← Sebelumnya</button>
-            <button disabled={page >= totalPages - 1} onClick={() => { setPage(p => p + 1); scrollToTop(); }} className="px-3 py-1.5 text-xs rounded-lg border border-border/50 hover:bg-muted disabled:opacity-30 transition-colors">Selanjutnya →</button>
+            <button disabled={page === 0} onClick={() => { setPage(p => p - 1); scrollToTop(); }} className="px-3 py-1.5 text-xs rounded-lg border border-border/50 hover:bg-muted disabled:opacity-30 transition-colors cursor-pointer">← Sebelumnya</button>
+            <button disabled={page >= totalPages - 1} onClick={() => { setPage(p => p + 1); scrollToTop(); }} className="px-3 py-1.5 text-xs rounded-lg border border-border/50 hover:bg-muted disabled:opacity-30 transition-colors cursor-pointer">Selanjutnya →</button>
           </div>
         </div>
       )}
@@ -278,7 +288,7 @@ export default function AdminTableView({ initialCards, availableSets }: { initia
                     <button
                       onClick={() => openModal(card)}
                       disabled={fetchingId === card.id}
-                      className="p-2 bg-muted/60 text-foreground/80 hover:text-foreground hover:bg-muted border border-border/50 rounded-lg transition-colors inline-flex disabled:opacity-50"
+                      className="p-2 bg-muted/60 text-foreground/80 hover:text-foreground hover:bg-muted border border-border/50 rounded-lg transition-colors inline-flex disabled:opacity-50 cursor-pointer"
                     >
                       {fetchingId === card.id ? <Loader2 size={14} className="animate-spin" /> : <Edit2 size={14} />}
                     </button>
@@ -298,40 +308,46 @@ export default function AdminTableView({ initialCards, availableSets }: { initia
           <div className="bg-background w-full max-w-4xl max-h-[90vh] flex flex-col rounded-3xl shadow-2xl border border-border overflow-hidden animate-in fade-in zoom-in-95">
             <div className="px-6 py-4 border-b border-border flex items-center justify-between bg-muted/30">
               <h3 className=" text-xl">{editingId ? "Edit Detail Kartu" : "Tambah Kartu Baru"}</h3>
-              <button onClick={closeModal} className="p-2 hover:bg-muted rounded-full transition-colors"><X size={20} /></button>
+              <button onClick={closeModal} className="p-2 hover:bg-muted rounded-full transition-colors cursor-pointer"><X size={20} /></button>
             </div>
             <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-4">
-                  <div><label className="text-xs  text-foreground/60">Ekspansi (Set)</label>
-                    <select name="set_id" value={formData.set_id} onChange={handleChange} className="w-full mt-1 p-2.5 bg-background border rounded-lg text-sm">
-                      {availableSets.map(s => <option key={s.id} value={s.id}>{s.name} ({s.code})</option>)}
-                    </select>
+                  <div className="relative w-full z-50">
+                    <CustomDropdown 
+                      label="Ekspansi (Set)" 
+                      options={availableSets.map(s => `${s.name} (${s.code})`)} 
+                      value={availableSets.find(s => s.id === formData.set_id) ? `${availableSets.find(s => s.id === formData.set_id)!.name} (${availableSets.find(s => s.id === formData.set_id)!.code})` : ""} 
+                      onChange={(val) => {
+                        const matched = availableSets.find(s => `${s.name} (${s.code})` === val);
+                        if (matched) setFormData({ ...formData, set_id: matched.id });
+                      }} 
+                    />
                   </div>
                   <div><label className="text-xs  text-foreground/60">Nomor Kartu</label>
-                    <input type="text" name="card_number" value={formData.card_number || ""} onChange={handleChange} className="w-full mt-1 p-2.5 bg-background border rounded-lg text-sm" placeholder="Contoh: 001/190" />
+                    <input type="text" name="card_number" value={formData.card_number || ""} onChange={handleChange} className="w-full mt-1 px-3 py-2 bg-background border border-border rounded-md text-sm focus:ring-1 focus:ring-foreground outline-none" placeholder="Contoh: 001/190" />
                   </div>
                   <div><label className="text-xs  text-foreground/60">Nama Kartu</label>
-                    <input type="text" name="name" value={formData.name || ""} onChange={handleChange} className="w-full mt-1 p-2.5 bg-background border rounded-lg text-sm" placeholder="Nama Pokémon / Item" />
+                    <input type="text" name="name" value={formData.name || ""} onChange={handleChange} className="w-full mt-1 px-3 py-2 bg-background border border-border rounded-md text-sm focus:ring-1 focus:ring-foreground outline-none" placeholder="Nama Pokémon / Item" />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div><label className="text-xs  text-foreground/60">Nama Varian</label>
-                      <input type="text" name="variant_name" value={formData.variant_name || ""} onChange={handleChange} className="w-full mt-1 p-2.5 bg-background border rounded-lg text-sm" placeholder="Kosongkan untuk Normal" />
+                      <input type="text" name="variant_name" value={formData.variant_name || ""} onChange={handleChange} className="w-full mt-1 px-3 py-2 bg-background border border-border rounded-md text-sm focus:ring-1 focus:ring-foreground outline-none" placeholder="Kosongkan untuk Normal" />
                     </div>
                     <div><label className="text-xs  text-foreground/60">Urutan (1, 2, 3..)</label>
-                      <input type="number" name="variant_order" value={formData.variant_order || 1} onChange={handleChange} className="w-full mt-1 p-2.5 bg-background border rounded-lg text-sm" />
+                      <input type="number" name="variant_order" value={formData.variant_order || 1} onChange={handleChange} className="w-full mt-1 px-3 py-2 bg-background border border-border rounded-md text-sm focus:ring-1 focus:ring-foreground outline-none" />
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div><label className="text-xs  text-foreground/60">Rarity</label>
-                      <input type="text" name="rarity" value={formData.rarity || ""} onChange={handleChange} className="w-full mt-1 p-2.5 bg-background border rounded-lg text-sm" placeholder="Contoh: MA, SR, RRR" />
+                      <input type="text" name="rarity" value={formData.rarity || ""} onChange={handleChange} className="w-full mt-1 px-3 py-2 bg-background border border-border rounded-md text-sm focus:ring-1 focus:ring-foreground outline-none" placeholder="Contoh: MA, SR, RRR" />
                     </div>
                     <div><label className="text-xs  text-foreground/60">HP</label>
-                      <input type="text" name="hp" value={formData.hp || ""} onChange={handleChange} className="w-full mt-1 p-2.5 bg-background border rounded-lg text-sm" />
+                      <input type="text" name="hp" value={formData.hp || ""} onChange={handleChange} className="w-full mt-1 px-3 py-2 bg-background border border-border rounded-md text-sm focus:ring-1 focus:ring-foreground outline-none" />
                     </div>
                   </div>
                   <div><label className="text-xs  text-foreground/60">URL Gambar Kartu</label>
-                    <input type="text" name="image_url" value={formData.image_url || ""} onChange={handleChange} className="w-full mt-1 p-2.5 bg-background border rounded-lg text-sm" />
+                    <input type="text" name="image_url" value={formData.image_url || ""} onChange={handleChange} className="w-full mt-1 px-3 py-2 bg-background border border-border rounded-md text-sm focus:ring-1 focus:ring-foreground outline-none" />
                   </div>
                 </div>
                 <div className="space-y-4">
@@ -357,7 +373,7 @@ export default function AdminTableView({ initialCards, availableSets }: { initia
               <button
                 onClick={handleSave}
                 disabled={isSaving}
-                className="justify-center h-[42px] px-6 bg-foreground text-background text-sm rounded-xl flex items-center gap-2 hover:scale-105 active:scale-95 transition-all shadow-sm disabled:opacity-50 order-1 sm:order-3"
+                className="justify-center h-[42px] px-6 bg-background border border-border/50 text-foreground hover:bg-muted/30 text-sm rounded-xl flex items-center gap-2 hover:scale-105 active:scale-95 transition-all shadow-sm disabled:opacity-50 order-1 sm:order-3 cursor-pointer"
               >
                 <Save size={16} /> {isSaving ? "Menyimpan..." : "Simpan Data"}
               </button>
@@ -365,7 +381,7 @@ export default function AdminTableView({ initialCards, availableSets }: { initia
               <button
                 onClick={closeModal}
                 disabled={isSaving}
-                className="justify-center h-[42px] px-4 bg-background border border-border/60 hover:border-foreground/40 text-foreground/70 hover:text-foreground hover:bg-muted/30 text-sm rounded-xl flex items-center gap-2 transition-all shadow-sm active:scale-95 order-2 sm:order-2"
+                className="justify-center h-[42px] px-4 bg-background border border-border/60 hover:border-foreground/40 text-foreground/70 hover:text-foreground hover:bg-muted/30 text-sm rounded-xl flex items-center gap-2 transition-all shadow-sm active:scale-95 order-2 sm:order-2 cursor-pointer"
               >
                 Batal
               </button>
@@ -374,7 +390,7 @@ export default function AdminTableView({ initialCards, availableSets }: { initia
                 <button
                   onClick={handleDelete}
                   disabled={isSaving}
-                  className="justify-center h-[42px] px-4 bg-red-500/10 text-red-600 text-sm rounded-xl flex items-center gap-2 hover:bg-red-500/20 active:scale-95 transition-all shadow-sm order-3 sm:order-1 sm:mr-auto"
+                  className="justify-center h-[42px] px-4 bg-red-500/10 text-red-600 text-sm rounded-xl flex items-center gap-2 hover:bg-red-500/20 active:scale-95 transition-all shadow-sm order-3 sm:order-1 sm:mr-auto cursor-pointer"
                 >
                   <Trash2 size={16} /> Hapus
                 </button>
@@ -387,7 +403,7 @@ export default function AdminTableView({ initialCards, availableSets }: { initia
       {showScrollTop && (
         <button
           onClick={scrollToTop}
-          className="fixed bottom-6 right-6 p-3.5 bg-foreground text-background rounded-full shadow-2xl hover:scale-110 transition-transform z-50 flex items-center justify-center border border-border/20"
+          className="fixed bottom-6 right-6 p-3.5 bg-background border border-border/50 text-foreground rounded-full shadow-2xl hover:bg-muted/30 transition-all z-50 flex items-center justify-center"
         >
           <ArrowUp size={22} strokeWidth={2.5} />
         </button>

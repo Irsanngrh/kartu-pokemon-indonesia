@@ -79,12 +79,12 @@ export default function DeckDashboardView({ userName, isLoggedIn }: { userName: 
               <Layers size={26} />
               Deck {userName || 'Saya'}
             </h1>
-            <p className="text-foreground/50 text-sm">Kelola dan rancang deck dengan 60 kartu terbaikmu.</p>
+            <p className="text-foreground/50 text-sm">Kelola dan rancang deck dengan 60 kartu terbaik kamu.</p>
           </div>
           {isLoggedIn && (
             <Link
               href="/decks/build"
-              className="flex items-center gap-2 bg-foreground text-background h-[42px] px-5 rounded-xl text-sm transition-all duration-200 shadow-sm hover:scale-105 active:scale-95"
+              className="flex items-center gap-2 bg-background dark:bg-muted/30 border border-border/50 text-foreground h-[42px] px-5 rounded-xl text-sm transition-all shadow-sm hover:bg-muted/50 active:scale-95"
             >
               <Plus size={18} />
               Buat Deck Baru

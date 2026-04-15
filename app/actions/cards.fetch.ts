@@ -25,7 +25,6 @@ const isRedisConfigured =
   process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN;
 const redis = isRedisConfigured ? Redis.fromEnv() : null;
 
-
 let inMemoryCache: PokemonCard[] | null = null;
 let inMemoryCacheTime = 0;
 
@@ -72,7 +71,8 @@ async function getAllCardsForFiltering(): Promise<PokemonCard[]> {
 export async function fetchCardsBasedOnFilters(
   filters: FilterParams,
   page: number = 0,
-  limit: number = PAGINATION_DEFAULT_LIMIT
+  limit: number = PAGINATION_DEFAULT_LIMIT,
+  deduplicateVariants: boolean = false
 ): Promise<{
   cards: PokemonCard[];
   hasMore: boolean;
@@ -90,8 +90,8 @@ export async function fetchCardsBasedOnFilters(
         return false;
 
       if (filters.expansionFilter && filters.expansionFilter !== 'Semua') {
-        const cardExp = card.sets
-          ? `${card.sets.name} (${card.sets.code})`
+        const cardExp = card.sets 
+          ? (card.sets.name.includes(`(${card.sets.code})`) ? card.sets.name : `${card.sets.name} (${card.sets.code})`)
           : '';
         if (cardExp !== filters.expansionFilter) return false;
       }
@@ -155,9 +155,23 @@ export async function fetchCardsBasedOnFilters(
       return (a.variant_order ?? 1) - (b.variant_order ?? 1);
     });
 
-    const totalCount = filtered.length;
+    // After sorting by variant_order asc, the first occurrence of each
+    // (set_id, card_number) pair is always the normal/base variant.
+    const displayList = deduplicateVariants
+      ? Array.from(
+          filtered
+            .reduce((map, card) => {
+              const key = `${card.set_id ?? ''}-${card.card_number ?? ''}`;
+              if (!map.has(key)) map.set(key, card);
+              return map;
+            }, new Map<string, PokemonCard>())
+            .values()
+        )
+      : filtered;
+
+    const totalCount = displayList.length;
     const from = page * limit;
-    const paginated = filtered.slice(from, from + limit);
+    const paginated = displayList.slice(from, from + limit);
 
     return { cards: paginated, hasMore: from + limit < totalCount, totalCount };
   } catch (err: unknown) {
@@ -193,7 +207,7 @@ export async function fetchFilterOptions(filters: FilterParams) {
   const setMap = new Map<string, number>();
   for (const c of allCards) {
     if (c.sets) {
-      const key = `${c.sets.name} (${c.sets.code})`;
+      const key = c.sets.name.includes(`(${c.sets.code})`) ? c.sets.name : `${c.sets.name} (${c.sets.code})`;
       if (!setMap.has(key)) setMap.set(key, c.sets.set_order ?? 99);
     }
   }
@@ -202,11 +216,14 @@ export async function fetchFilterOptions(filters: FilterParams) {
     .map(([name]) => name);
   const expansions = ['Semua', ...sortedSets];
 
-  // Base subset: filter by expansion + cardType
+  // Base subset: filter by search string + expansion + cardType
   let base = allCards;
+  if (filters.searchQuery) {
+    base = base.filter((c) => c.name?.toLowerCase().includes(filters.searchQuery!.toLowerCase()));
+  }
   if (expansionFilter !== 'Semua') {
     base = base.filter((c) => {
-      const exp = c.sets ? `${c.sets.name} (${c.sets.code})` : '';
+      const exp = c.sets ? (c.sets.name.includes(`(${c.sets.code})`) ? c.sets.name : `${c.sets.name} (${c.sets.code})`) : '';
       return exp === expansionFilter;
     });
   }
@@ -255,5 +272,21 @@ export async function fetchFilterOptions(filters: FilterParams) {
   const unknownRarities = Array.from(existingRarities).filter((r) => !rarityOrder.includes(r as string)).sort().map(String);
   const rarities = ['Semua', ...sortedRarities, ...unknownRarities];
 
-  return { expansions, illustrators, regulations, rarities };
+  const elementCards = matchFor('elementFilter');
+  const elementsSet = new Set<string>();
+  elementCards.forEach(c => {
+    if (c.hp) getElements(c).forEach(e => elementsSet.add(e));
+  });
+  const elementOrder = ['Normal', 'Api', 'Air', 'Listrik', 'Rumput', 'Petarung', 'Psikis', 'Naga', 'Kegelapan', 'Baja'];
+  const elements = ['Semua', ...elementOrder.filter(e => elementsSet.has(e)), ...Array.from(elementsSet).filter(e => !elementOrder.includes(e)).sort()];
+
+  const stageCards = matchFor('stageFilter');
+  const stagesSet = new Set<string>();
+  stageCards.forEach(c => {
+    if (c.hp) getStageInfo(c).forEach(s => stagesSet.add(s));
+  });
+  const stageOrder = ['Basic', 'Stage 1', 'Stage 2', 'EX', 'GX', 'V', 'V-UNION', 'VMAX', 'VSTAR'];
+  const stages = ['Semua', ...stageOrder.filter(s => stagesSet.has(s)), ...Array.from(stagesSet).filter(s => !stageOrder.includes(s)).sort()];
+
+  return { expansions, elements, stages, illustrators, regulations, rarities };
 }

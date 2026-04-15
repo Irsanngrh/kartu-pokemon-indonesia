@@ -15,26 +15,24 @@ interface PokemonCardProps {
 }
 
 export default function PokemonCard({ card, source = 'library', priority = false, uid, n }: PokemonCardProps) {
-  // Priority (above-the-fold) cards start as 'loaded' to avoid the
-  // opacity-0 → opacity-100 transition blank that afflicts first rows on page load.
   const [imageState, setImageState] = useState<'loading' | 'loaded' | 'error'>(priority ? 'loaded' : 'loading');
   const [retryCount, setRetryCount] = useState(0);
 
   const urlCardNumber = (card.card_number || '000').split('/')[0].trim();
-  
+
   let queryParams = new URLSearchParams();
-  
+
   if (card.variant_name) {
     const cleanVariant = card.variant_name.toLowerCase().replace(/\s+/g, '-');
     queryParams.append('variant', cleanVariant);
   }
-  
+
   if (source !== 'library') {
     queryParams.append('from', source);
     if (uid) queryParams.append('uid', uid);
     if (n) queryParams.append('n', n);
   }
-  
+
   const qs = queryParams.toString() ? `?${queryParams.toString()}` : '';
   const hrefUrl = `/${card.sets?.code || 'unknown'}/${urlCardNumber}${qs}`;
 
@@ -67,35 +65,32 @@ export default function PokemonCard({ card, source = 'library', priority = false
              </div>
           )}
           {card.image_url ? (
-            <img 
+            <img
               key={imgSrc}
-              src={imgSrc} 
+              src={imgSrc!}
               alt={card.name}
+              loading={priority ? 'eager' : 'lazy'}
+              decoding="async"
+              fetchPriority={priority ? 'high' : 'auto'}
               onLoad={() => setImageState('loaded')}
               onError={handleImageError}
-              className={`w-full h-full object-cover transition-opacity duration-300 ${imageState === 'loaded' ? 'opacity-100' : 'opacity-0'}`}
-              loading={priority ? 'eager' : 'lazy'}
+              className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${imageState === 'loaded' ? 'opacity-100' : 'opacity-0'}`}
             />
           ) : (
             <span className="text-[10px] text-foreground/40 uppercase tracking-widest">No Image</span>
           )}
         </div>
         <div className="flex flex-col gap-1 px-1 pb-1">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-[10px]  text-foreground/50 uppercase tracking-widest truncate">
-            {card.card_number || "---"}
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-foreground/50 uppercase tracking-widest truncate">
+              {card.card_number || "---"}{card.rarity ? ` (${card.rarity})` : ""}
             </span>
-            {card.rarity && (
-              <span className="text-[10px]  text-foreground/60 bg-background/80 px-1.5 py-0.5 rounded-md border border-border/50 shadow-sm">
-                {card.rarity}
-              </span>
-            )}
           </div>
           <h3 className="text-sm leading-tight truncate transition-colors">
             {card.name}
           </h3>
           <div className="flex items-center gap-1.5">
-            <span className="text-xs  text-foreground/60 truncate">
+            <span className="text-xs text-foreground/60 truncate">
               {card.sets?.name || "Unknown Set"}
             </span>
           </div>

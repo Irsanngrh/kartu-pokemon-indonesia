@@ -69,7 +69,7 @@ export default function CollectionView({ initialCollections, userName, isOwner, 
         {isOwner && (
           <button
             onClick={handleShare}
-            className="flex items-center gap-2 bg-foreground text-background h-[42px] px-5 rounded-xl text-sm transition-all shadow-sm hover:scale-105 active:scale-95 duration-200"
+            className="flex items-center gap-2 bg-background dark:bg-muted/30 border border-border/50 text-foreground h-[42px] px-5 rounded-xl text-sm transition-all shadow-sm hover:bg-muted/50 cursor-pointer"
           >
             {copied ? <Check size={18} /> : <Share2 size={18} />}
             {copied ? "Tersalin!" : "Bagikan"}
@@ -77,18 +77,16 @@ export default function CollectionView({ initialCollections, userName, isOwner, 
         )}
       </header>
 
-      <div className="flex gap-4 border-b border-border/40 pb-2 mb-6">
+      <div className="flex gap-4 border-b border-border/40 mb-6 px-2">
         <button
           onClick={() => setActiveTab("collection")}
-          className={`px-4 py-2 text-sm  rounded-t-lg transition-colors ${activeTab === "collection" ? "bg-foreground text-background" : "bg-muted text-foreground/60 hover:text-foreground"
-            }`}
+          className={`px-4 py-2 text-sm rounded-t-lg transition-all border-b-2 -mb-[2px] cursor-pointer ${activeTab === "collection" ? "border-foreground text-foreground bg-muted/30 dark:bg-muted/20 font-medium" : "border-transparent text-foreground/60 hover:text-foreground hover:bg-muted/10"}`}
         >
           Koleksi {isOwner ? "" : ""}
         </button>
         <button
           onClick={() => setActiveTab("wishlist")}
-          className={`px-4 py-2 text-sm  rounded-t-lg transition-colors ${activeTab === "wishlist" ? "bg-foreground text-background" : "bg-muted text-foreground/60 hover:text-foreground"
-            }`}
+          className={`px-4 py-2 text-sm rounded-t-lg transition-all border-b-2 -mb-[2px] cursor-pointer ${activeTab === "wishlist" ? "border-foreground text-foreground bg-muted/30 dark:bg-muted/20 font-medium" : "border-transparent text-foreground/60 hover:text-foreground hover:bg-muted/10"}`}
         >
           Wishlist
         </button>
@@ -99,7 +97,7 @@ export default function CollectionView({ initialCollections, userName, isOwner, 
           <div key={item.cards.id} className="relative">
             <PokemonCard card={item.cards} source={activeTab} uid={userId} n={userName} />
             {activeTab === "collection" && (
-              <div className="absolute -top-3 -right-3 bg-foreground text-background  text-sm w-8 h-8 rounded-full flex items-center justify-center border-2 border-background z-20 shadow-md">
+              <div className="absolute -top-3 -right-3 bg-background dark:bg-muted/50 text-foreground text-sm w-8 h-8 rounded-full flex items-center justify-center border-2 border-border/50 z-20 shadow-md">
                 {item.quantity}
               </div>
             )}

@@ -21,7 +21,7 @@ export default function DeckShareButton({ deckId, deckName }: { deckId: string; 
   return (
     <button
       onClick={handleShare}
-      className="flex items-center gap-2 bg-foreground text-background h-[42px] px-5 rounded-xl text-sm hover:scale-105 active:scale-95 transition-all shadow-sm duration-200"
+      className="flex items-center gap-2 bg-background dark:bg-muted/30 border border-border/50 text-foreground h-[42px] px-5 rounded-xl text-sm hover:bg-muted/50 active:scale-95 transition-all shadow-sm cursor-pointer"
       title={`Bagikan deck "${deckName}"`}
     >
       {copied ? (

@@ -1,28 +1,10 @@
-import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
+import { createClient as supabaseCreateClient } from '@supabase/supabase-js';
 
-export async function createClient() {
-  const cookieStore = await cookies();
-
-  return createServerClient(
+// Service role client for all server-side operations.
+// Auth is verified via Auth.js session before any user-specific queries.
+export function createClient() {
+  return supabaseCreateClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll();
-        },
-        setAll(cookiesToSet) {
-          try {
-            cookiesToSet.forEach(({ name, value, options }) => {
-              cookieStore.set(name, value, options);
-            });
-          } catch {
-            // Intentionally silent: cookie-setting fails in Server Components (read-only context).
-            // This is expected behaviour per Supabase SSR documentation.
-          }
-        },
-      },
-    }
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 }

@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { ChevronLeft, Plus, Minus, Heart, Bookmark, Info } from "lucide-react";
 import ZoomableImage from "@/components/ui/ZoomableImage";
 import { createClient } from "@/utils/supabase/client";
+import { useSession } from "next-auth/react";
 import { updateCollectionAction } from "@/app/actions/collections";
 import { PokemonCard as PokemonCardType, Attack } from "@/types";
 import { getStageLabel } from "@/lib/card-helpers";
@@ -23,6 +24,7 @@ export default function CardDetailView({ initialCards }: { initialCards: Pokemon
   const [isWishlistLoading, setIsWishlistLoading] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState("");
+  const { data: session } = useSession();
 
   const searchParams = useSearchParams();
   const fromSource = searchParams.get("from");
@@ -48,6 +50,15 @@ export default function CardDetailView({ initialCards }: { initialCards: Pokemon
   const [supabase] = useState(() => createClient());
 
   useEffect(() => {
+    if (session?.user?.id) {
+      setUserId(session.user.id);
+    } else {
+      setUserId(null);
+      setCollectionMap({});
+    }
+  }, [session]);
+
+  useEffect(() => {
     if (variantParam && initialCards.length > 0) {
       const idx = initialCards.findIndex(c => {
         const vName = c.variant_name ? c.variant_name.toLowerCase().replace(/\s+/g, '-') : "";
@@ -62,20 +73,17 @@ export default function CardDetailView({ initialCards }: { initialCards: Pokemon
   const card = initialCards[activeIndex];
 
   useEffect(() => {
+    if (!userId) return;
     let isMounted = true;
-    
-    const fetchUserAndCollection = async () => {
-      const { data: authData } = await supabase.auth.getUser();
-      if (!authData.user || !isMounted) return;
-      
-      setUserId(authData.user.id);
+
+    const fetchCollection = async () => {
       const cardIds = initialCards.map(c => c.id);
-      
+
       const { data: colData } = await supabase
         .from("user_collections")
         .select("card_id, quantity, is_wishlist")
         .in("card_id", cardIds)
-        .eq("user_id", authData.user.id);
+        .eq("user_id", userId);
 
       if (colData && isMounted) {
         const newMap: Record<string, CollectionData> = {};
@@ -85,13 +93,13 @@ export default function CardDetailView({ initialCards }: { initialCards: Pokemon
         setCollectionMap(newMap);
       }
     };
-    
-    fetchUserAndCollection();
-    
-    return () => { 
-      isMounted = false; 
+
+    fetchCollection();
+
+    return () => {
+      isMounted = false;
     };
-  }, [initialCards, supabase]);
+  }, [userId, initialCards, supabase]);
 
   useEffect(() => {
     setInputValue((collectionMap[card.id]?.quantity || 0).toString());
@@ -221,8 +229,8 @@ export default function CardDetailView({ initialCards }: { initialCards: Pokemon
             </button>
           </div>
         </div>
-        <div className="lg:col-span-8 flex flex-col gap-6 w-full">
-          <div className="flex flex-col gap-1">
+        <div className="lg:col-span-8 flex flex-col w-full">
+          <div className="flex flex-col gap-1 mb-6">
             <h1 className="text-3xl md:text-4xl font-bold tracking-tight">{card.name}</h1>
             <div className="flex flex-wrap items-center gap-2 mt-1">
               <span className="text-xs text-foreground/50 uppercase tracking-widest leading-none">{cardStage}</span>
@@ -301,9 +309,11 @@ export default function CardDetailView({ initialCards }: { initialCards: Pokemon
             )}
             {card.description && <p className="text-foreground/70 leading-relaxed italic text-sm mt-4">"{card.description}"</p>}
           </div>
-          <hr className="border-border/60" />
-          {card.attacks && card.attacks.length > 0 && (
-            <div className="flex flex-col gap-3">
+
+          <hr className={`border-border/60 ${((card.attacks && card.attacks.filter(a => a.name?.trim() || a.effect?.trim() || (a.cost && a.cost.length > 0)).length > 0) || Number(card.hp) > 0) ? 'mb-6' : 'mb-3'}`} />
+
+          {card.attacks && card.attacks.filter(a => a.name?.trim() || a.effect?.trim() || (a.cost && a.cost.length > 0)).length > 0 && (
+            <div className="flex flex-col gap-3 mb-6">
               {card.attacks.map((attack: Attack, index: number) => {
                 const validCost = attack.cost && attack.cost.length > 0;
                 const validName = attack.name && attack.name.trim() !== "";
@@ -335,7 +345,7 @@ export default function CardDetailView({ initialCards }: { initialCards: Pokemon
             </div>
           )}
           {Number(card.hp) > 0 && (
-            <div className="grid grid-cols-3 gap-px bg-border/60 border border-border/60 rounded-[20px] overflow-hidden">
+            <div className="grid grid-cols-3 gap-px bg-border/60 border border-border/60 rounded-[20px] overflow-hidden mb-6">
               <div className="flex flex-col items-center justify-center p-4 gap-1.5 bg-background">
                 <span className="text-foreground/40 text-[10px] font-bold uppercase tracking-widest">Kelemahan</span>
                 <div className="flex items-center gap-1.5  text-sm">

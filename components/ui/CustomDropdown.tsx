@@ -45,7 +45,7 @@ export default function CustomDropdown({ label, options, value, onChange, disabl
 
   return (
     <div className="relative flex flex-col gap-1.5 w-full" ref={dropdownRef}>
-      <span className="text-[10px] font-bold uppercase tracking-widest text-foreground/50 ml-1">
+      <span className="text-[10px] uppercase tracking-widest text-foreground/50 ml-1">
         {label}
       </span>
       
@@ -78,7 +78,7 @@ export default function CustomDropdown({ label, options, value, onChange, disabl
                 }}
                 className={`flex items-center justify-between w-full px-3 py-2 text-sm  rounded-lg transition-colors ${
                   value === option 
-                    ? "bg-foreground text-background " 
+                    ? "bg-muted/80 dark:bg-muted/50 text-foreground font-medium" 
                     : "hover:bg-muted text-foreground/80"
                 }`}
               >

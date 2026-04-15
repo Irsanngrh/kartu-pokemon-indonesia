@@ -1,7 +1,7 @@
 "use client";
 
 import { PokemonCard } from "@/types";
-import { Minus, Plus, X } from "lucide-react";
+import { Minus, Plus, Trash2 } from "lucide-react";
 
 interface DeckCardItemProps {
   card: PokemonCard;
@@ -16,13 +16,7 @@ export default function DeckCardItem({ card, quantity, onIncrease, onDecrease, o
 
   return (
     <div className={`flex items-center gap-3 p-2 rounded-xl border ${bgColor} transition-all relative group`}>
-      <button 
-        onClick={() => onRemove(card)}
-        className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full p-1 opacity-0 
-                   group-hover:opacity-100 transition-opacity shadow-md z-10"
-      >
-        <X size={12} strokeWidth={3} />
-      </button>
+
 
       <div className="w-12 h-16 shrink-0 relative rounded-md overflow-hidden bg-muted shadow-sm flex items-center justify-center">
         {card.image_url ? (
@@ -33,7 +27,9 @@ export default function DeckCardItem({ card, quantity, onIncrease, onDecrease, o
             loading="lazy"
           />
         ) : (
-          <div className="w-6 h-6 rounded-full border-2 border-dashed border-muted-foreground/30 animate-spin" />
+          <div className="w-full h-full flex items-center justify-center text-foreground/20">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+          </div>
         )}
       </div>
       
@@ -44,21 +40,31 @@ export default function DeckCardItem({ card, quantity, onIncrease, onDecrease, o
         <p className="text-xs opacity-70 truncate">{card.sets?.code} {card.card_number}</p>
       </div>
 
-      <div className="flex bg-background/50 backdrop-blur rounded-lg border border-border overflow-hidden shrink-0">
-        <button 
-          onClick={() => onDecrease(card)}
-          className="p-1.5 hover:bg-muted text-foreground/70 hover:text-foreground transition-colors"
-        >
-          <Minus size={14} />
-        </button>
-        <div className="w-8 flex items-center justify-center text-sm  bg-muted/30">
-          {quantity}
+      <div className="flex flex-col items-center gap-1.5 shrink-0 pr-3 z-10">
+        <div className="flex bg-background/50 backdrop-blur rounded-lg border border-border overflow-hidden">
+          <button 
+            onClick={() => onDecrease(card)}
+            className="p-1.5 hover:bg-muted text-foreground/70 hover:text-foreground transition-colors cursor-pointer"
+          >
+            <Minus size={14} />
+          </button>
+          <div className="w-8 flex items-center justify-center text-sm bg-muted/30">
+            {quantity}
+          </div>
+          <button 
+            onClick={() => onIncrease(card)}
+            className="p-1.5 hover:bg-muted text-foreground/70 hover:text-foreground transition-colors cursor-pointer"
+          >
+            <Plus size={14} />
+          </button>
         </div>
+        
         <button 
-          onClick={() => onIncrease(card)}
-          className="p-1.5 hover:bg-muted text-foreground/70 hover:text-foreground transition-colors"
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); onRemove(card); }}
+          className="bg-red-500/10 hover:bg-red-500/20 text-red-600 rounded-md py-1.5 transition-colors cursor-pointer w-full flex items-center justify-center gap-1.5 text-[10px] font-medium shadow-sm"
+          title="Hapus dari Deck"
         >
-          <Plus size={14} />
+          <Trash2 size={12} /> Hapus
         </button>
       </div>
     </div>

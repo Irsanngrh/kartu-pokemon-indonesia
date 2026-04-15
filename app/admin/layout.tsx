@@ -1,12 +1,11 @@
-import { createClient } from "@/utils/supabase/server";
+import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const session = await auth();
+  const isAdmin = session?.user?.isAdmin === true;
 
-  const isAdmin = user?.app_metadata?.role === 'admin';
-  if (!user || !isAdmin) {
+  if (!session?.user || !isAdmin) {
     redirect("/");
   }
 

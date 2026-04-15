@@ -7,7 +7,8 @@ export function getCardType(card: PokemonCard): string {
   if (stage.includes('stadium')) return 'Stadium';
   if (stage.includes('tool')) return 'Pokémon Tool';
   if (stage.includes('item')) return 'Item';
-  if (stage.includes('energy') || stage.includes('energi')) return 'Energy';
+  const nameLower = (card.name ?? '').toLowerCase();
+  if (stage.includes('energy') || stage.includes('energi') || nameLower.includes('energy') || nameLower.includes('energi')) return 'Energi';
   return 'Lainnya';
 }
 

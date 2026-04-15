@@ -1,4 +1,4 @@
-import { createClient } from "@/utils/supabase/server";
+import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import DeckBuilderView from "@/components/views/DeckBuilderView";
 import { getDeckById } from "@/app/actions/decks";
@@ -8,10 +8,9 @@ export default async function DeckBuilderPage({
 }: {
   searchParams: Promise<{ id?: string }>;
 }) {
-  const supabase = await createClient();
-  const { data, error } = await supabase.auth.getUser();
+  const session = await auth();
 
-  if (error || !data?.user) {
+  if (!session?.user) {
     redirect("/");
   }
 

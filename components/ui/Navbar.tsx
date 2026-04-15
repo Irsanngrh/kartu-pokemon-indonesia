@@ -3,46 +3,33 @@
 import { useTheme } from "next-themes";
 import { Moon, Sun, LogOut, LibrarySquare, Layers } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { createClient } from "@/utils/supabase/client";
-import { User } from "@supabase/supabase-js";
+import { useState, useEffect } from "react";
+import { useSession, signIn, signOut } from "next-auth/react";
 import { useRouter, usePathname } from "next/navigation";
 
 export default function Navbar() {
   const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
-  const [user, setUser] = useState<User | null>(null);
-  
+  const { data: session, status } = useSession();
+  const user = session?.user ?? null;
+
   const router = useRouter();
   const pathname = usePathname();
-  const supabase = createClient();
 
-  useEffect(() => {
-    setMounted(true);
-    supabase.auth.getUser().then(({ data }) => {
-      if (data?.user) setUser(data.user);
-    });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-    });
-    return () => subscription.unsubscribe();
-  }, [supabase.auth]);
+  useEffect(() => { setMounted(true); }, []);
 
   const handleLogin = async () => {
-    await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback` }
-    });
+    await signIn("google", { callbackUrl: window.location.href });
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    await signOut({ redirect: false });
     if (pathname === '/collection') {
       router.push('/');
     }
   };
 
-  if (!mounted) return null;
+  if (!mounted || status === "loading") return null;
 
   return (
     <nav className="sticky top-0 z-50 w-full border-b border-border bg-background/80 backdrop-blur-md">
@@ -64,7 +51,7 @@ export default function Navbar() {
           <span className="truncate font-bold">Kartu Pokémon Indonesia</span>
         </Link>
         <div className="flex items-center gap-3 sm:gap-4 shrink-0">
-          <button onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")} className="p-2 rounded-full bg-muted/50 hover:bg-muted border border-transparent hover:border-border/60 transition-colors shrink-0">
+          <button onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")} className="p-2 rounded-full bg-muted/50 hover:bg-muted border border-transparent hover:border-border/60 transition-colors shrink-0 cursor-pointer">
             {resolvedTheme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
           </button>
           <div className="w-[1px] h-6 bg-border/60 hidden sm:block"></div>
@@ -78,16 +65,19 @@ export default function Navbar() {
           </Link>
           {user ? (
             <div className="flex items-center gap-3 sm:gap-4 shrink-0">
-              <div className="hidden sm:flex items-center justify-center bg-muted/30 p-1 rounded-full border border-border/50 shrink-0" title={user.user_metadata?.full_name || user.email || "User"}>
-                {user.user_metadata?.avatar_url ? (
-                  <img src={user.user_metadata.avatar_url} alt="Avatar" className="w-6 h-6 rounded-full object-cover" />
+              <div className="hidden sm:flex items-center justify-center bg-muted/30 p-1 rounded-full border border-border/50 shrink-0 relative group cursor-pointer">
+                {user.image ? (
+                  <img src={user.image} alt="Avatar" className="w-6 h-6 rounded-full object-cover" />
                 ) : (
-                  <div className="w-6 h-6 rounded-full bg-foreground text-background flex items-center justify-center text-xs font-medium shrink-0">
-                    {user.user_metadata?.full_name?.charAt(0).toUpperCase() || user.email?.charAt(0).toUpperCase() || "U"}
+                  <div className="w-6 h-6 rounded-full bg-background dark:bg-muted/50 border border-border/50 text-foreground flex items-center justify-center text-xs font-medium shrink-0">
+                    {user.name?.charAt(0).toUpperCase() || user.email?.charAt(0).toUpperCase() || "U"}
                   </div>
                 )}
+                <div className="absolute top-[120%] right-1/2 translate-x-1/2 bg-background dark:bg-muted font-bold text-foreground text-xs px-3 py-1.5 rounded-lg shadow-md opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap border border-border/60 z-50">
+                  {user.name || user.email || "User"}
+                </div>
               </div>
-              <button onClick={handleLogout} className="p-2 rounded-full bg-muted/50 hover:bg-red-500/10 hover:text-red-500 border border-transparent hover:border-red-500/20 transition-colors shrink-0" >
+              <button onClick={handleLogout} className="p-2 rounded-full bg-muted/50 hover:bg-red-500/10 hover:text-red-500 border border-transparent hover:border-red-500/20 transition-colors shrink-0 cursor-pointer" >
                 <LogOut size={16} />
               </button>
             </div>
