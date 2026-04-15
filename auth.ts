@@ -2,10 +2,17 @@ import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+let _supabaseAdmin: ReturnType<typeof createClient> | null = null;
+
+function getSupabaseAdmin() {
+  if (!_supabaseAdmin) {
+    _supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+  }
+  return _supabaseAdmin;
+}
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
@@ -25,7 +32,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (account && profile?.email) {
         const isEnvAdmin = adminEmails.includes(profile.email.toLowerCase());
 
-        const { data } = await supabaseAdmin
+        const { data } = await getSupabaseAdmin()
           .from("users")
           .upsert(
             {
@@ -45,7 +52,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         }
       } else if (token.userId) {
         // Re-read is_admin on subsequent requests so DB changes take effect immediately.
-        const { data } = await supabaseAdmin
+        const { data } = await getSupabaseAdmin()
           .from("users")
           .select("email, is_admin")
           .eq("id", token.userId)

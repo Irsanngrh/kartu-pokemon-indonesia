@@ -43,7 +43,7 @@ async function getAllCardsForFiltering(): Promise<PokemonCard[]> {
     return inMemoryCache;
   }
 
-  const supabase = await createClient();
+  const supabase = createClient();
   const { data, error } = await supabase
     .from('cards')
     .select(

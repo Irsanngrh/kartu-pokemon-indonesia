@@ -5,7 +5,6 @@ import { Search, Edit2, Plus, X, Save, Trash2, ArrowUp, Loader2, Info } from "lu
 import { createClient } from "@/utils/supabase/client";
 import CustomDropdown from "@/components/ui/CustomDropdown";
 import { addCardAction, updateCardAction, deleteCardAction } from "@/app/actions/cards";
-import { PokemonCard, SetInfo } from "@/types";
 
 export default function AdminTableView({ initialCards, availableSets }: { initialCards: any[], availableSets: any[] }) {
   const [cards, setCards] = useState(initialCards);
@@ -26,7 +25,7 @@ export default function AdminTableView({ initialCards, availableSets }: { initia
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
   useEffect(() => {
     const handleScroll = () => {

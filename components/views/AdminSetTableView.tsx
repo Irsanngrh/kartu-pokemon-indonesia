@@ -2,7 +2,6 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { Search, Edit2, Plus, X, Save, Trash2, ArrowUp, Loader2, Info } from "lucide-react";
-import { createClient } from "@/utils/supabase/client";
 import { addSetAction, updateSetAction, deleteSetAction, SetPayload } from "@/app/actions/sets";
 
 export default function AdminSetTableView({ initialSets }: { initialSets: any[] }) {

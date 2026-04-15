@@ -1,8 +1,15 @@
 # Kartu Pokémon Indonesia
 
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-kartu--pokemon--indonesia.vercel.app-brightgreen?style=flat-square&logo=vercel)](https://kartu-pokemon-indonesia.vercel.app)
+[![Next.js](https://img.shields.io/badge/Next.js-16-black?style=flat-square&logo=next.js)](https://nextjs.org)
+[![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-3ECF8E?style=flat-square&logo=supabase)](https://supabase.com)
+
+> 🔗 **Coba langsung:** [kartu-pokemon-indonesia.vercel.app](https://kartu-pokemon-indonesia.vercel.app)
+
 Database kartu Pokémon TCG versi bahasa Indonesia yang lengkap. Pengguna dapat menelusuri kartu, mengelola koleksi pribadi, membuat daftar keinginan, dan merakit deck kompetitif.
 
 ---
+
 
 ## Fitur Utama
 

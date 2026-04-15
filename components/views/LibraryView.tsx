@@ -8,61 +8,7 @@ import { Search, ArrowUp, Loader2, Info, RotateCcw, BookOpen, Layers } from "luc
 import { PokemonCard as PokemonCardType } from "@/types";
 import { fetchCardsBasedOnFilters, fetchFilterOptions } from "@/app/actions/cards.fetch";
 
-function getCardType(card: any) {
-  if (card.hp) return "Pokémon";
-  const stage = (card.stage || "").toLowerCase();
-  if (stage.includes("supporter")) return "Supporter";
-  if (stage.includes("stadium")) return "Stadium";
-  if (stage.includes("tool")) return "Pokémon Tool";
-  if (stage.includes("item")) return "Item";
-  if (stage.includes("energy") || stage.includes("energi")) return "Energi";
-  return "Lainnya";
-}
 
-function getElements(card: any) {
-  if (!card.types) return [];
-  return card.types.map((url: string) => {
-    const u = url.toLowerCase();
-    if (u.includes('grass')) return 'Rumput';
-    if (u.includes('fire')) return 'Api';
-    if (u.includes('water')) return 'Air';
-    if (u.includes('lightning')) return 'Listrik';
-    if (u.includes('psychic')) return 'Psikis';
-    if (u.includes('fighting')) return 'Petarung';
-    if (u.includes('darkness') || u.includes('dark')) return 'Kegelapan';
-    if (u.includes('metal')) return 'Baja';
-    if (u.includes('dragon')) return 'Naga';
-    if (u.includes('colorless')) return 'Normal';
-    return 'Lainnya';
-  });
-}
-
-function getStageInfo(card: any) {
-  const nameUpper = (card.name || '').toUpperCase();
-  const stageRaw = (card.stage || '').trim();
-  const stageLower = stageRaw.toLowerCase();
-
-  let base = 'Lainnya';
-  if (stageLower.includes('basic') || stageLower === 'basic') base = 'Basic';
-  else if (stageLower.includes('stage 1')) base = 'Stage 1';
-  else if (stageLower.includes('stage 2')) base = 'Stage 2';
-  else if (stageRaw) base = stageRaw;
-
-  if (nameUpper.includes('V-UNION')) return { categories: ['V-UNION'] };
-  if (nameUpper.includes('VMAX')) return { categories: ['VMAX'] };
-  if (nameUpper.includes('VSTAR')) return { categories: ['VSTAR'] };
-
-  let suffix = '';
-  if (nameUpper.endsWith(' EX') || nameUpper.includes(' EX ')) suffix = 'EX';
-  else if (nameUpper.includes('GX')) suffix = 'GX';
-  else if (nameUpper.endsWith(' V') || nameUpper.includes(' V ')) suffix = 'V';
-
-  if (suffix) {
-    if (base === 'Basic' || base === 'Stage 1' || base === 'Stage 2') return { categories: [base, suffix] };
-    return { categories: [suffix] };
-  }
-  return { categories: [base] };
-}
 
 // Reads saved filters from sessionStorage — returns null on server.
 function getSavedFilters(): Record<string, string> | null {
@@ -326,8 +272,6 @@ export default function LibraryView({
     }
   };
 
-  const displayedCards = fetchedCards;
-  const hasMoreCards = hasMoreServer;
 
   const loadMoreCards = async () => {
     if (isLoadingCards || !hasMoreServer) return;
@@ -357,7 +301,6 @@ export default function LibraryView({
     if (loaderRef.current) currentObserver.observe(loaderRef.current);
     return () => { if (loaderRef.current) currentObserver.unobserve(loaderRef.current); };
   }, [hasMoreServer, isLoadingCards, currentPage]);
-
 
 
   const scrollToFilters = () => {
@@ -472,10 +415,10 @@ export default function LibraryView({
         <span>Menampilkan {totalCount} Kartu</span>
       </div>
       <div className="relative z-10 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-5">
-        {displayedCards.map((card, index) => (
+        {fetchedCards.map((card, index) => (
           <PokemonCard key={card.id} card={card} source="library" priority={index < 6} />
         ))}
-        {displayedCards.length === 0 && !isLoadingCards && (
+        {fetchedCards.length === 0 && !isLoadingCards && (
           <div className="col-span-full py-20 flex flex-col items-center justify-center gap-3">
             <span className="text-4xl grayscale opacity-50">🔍</span>
             <p className="text-foreground/50 text-sm uppercase tracking-widest">Kartu tidak ditemukan</p>
@@ -487,7 +430,7 @@ export default function LibraryView({
           <Loader2 className="animate-spin text-foreground/30" size={36} />
         </div>
       )}
-      {!isLoadingCards && hasMoreCards && (
+      {!isLoadingCards && hasMoreServer && (
         <div ref={loaderRef} className="w-full py-2"></div>
       )}
       {showScrollTop && (
