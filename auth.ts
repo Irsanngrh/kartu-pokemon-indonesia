@@ -2,9 +2,14 @@ import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import { createClient } from "@supabase/supabase-js";
 
-let _supabaseAdmin: ReturnType<typeof createClient> | null = null;
+// Service-role admin client — typed as any because supabase-js requires a
+// full Relationships field per table to satisfy GenericSchema, which is
+// impractical for a minimal inline type. Runtime behaviour is unaffected.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _supabaseAdmin: any = null;
 
-function getSupabaseAdmin() {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function getSupabaseAdmin(): any {
   if (!_supabaseAdmin) {
     _supabaseAdmin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -13,6 +18,7 @@ function getSupabaseAdmin() {
   }
   return _supabaseAdmin;
 }
+
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [

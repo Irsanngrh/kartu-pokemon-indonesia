@@ -47,13 +47,15 @@ export default async function DeckPreviewPage({
 
   return (
     <main className="py-8 flex flex-col gap-8">
-      {/* Back */}
-      <Link
-        href="/decks"
-        className="inline-flex items-center gap-2 text-sm font-medium text-foreground/60 hover:text-foreground transition-colors w-fit cursor-pointer"
-      >
-        <ChevronLeft size={18} /> Kembali ke Deck
-      </Link>
+      {/* Back — only shown to the deck owner */}
+      {isOwner && (
+        <Link
+          href="/decks"
+          className="inline-flex items-center gap-2 text-sm font-medium text-foreground/60 hover:text-foreground transition-colors w-fit cursor-pointer"
+        >
+          <ChevronLeft size={18} /> Kembali ke Deck
+        </Link>
+      )}
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
